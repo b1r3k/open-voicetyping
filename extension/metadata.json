@@ -4,5 +4,8 @@
   "uuid": "voicetyping@cx-lab.com",
   "shell-version": [
     "47"
-  ]
+  ],
+  "url": "https://github.com/cx-lab/voicetyping",
+  "version": 1,
+  "settings-schema": "org.gnome.shell.extensions.voicetyping"
 }

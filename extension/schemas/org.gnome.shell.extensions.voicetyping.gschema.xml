@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.voicetyping" path="/org/gnome/shell/extensions/voicetyping/">
+    <key name="openai-api-key" type="s">
+      <default>''</default>
+      <summary>OpenAI API Key</summary>
+      <description>API key for OpenAI services</description>
+    </key>
+    <key name="openai-api-url" type="s">
+      <default>'https://api.openai.com/v1'</default>
+      <summary>OpenAI API URL</summary>
+      <description>URL endpoint for OpenAI API</description>
+    </key>
+  </schema>
+</schemalist>

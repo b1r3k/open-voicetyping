@@ -1,1 +1,37 @@
-/* Add your custom extension styling here */
+/* VoiceTyping Extension Styles */
+
+/* Custom styling for the indicator icon */
+.voicetyping-indicator {
+    color: #3584e4;
+}
+
+.voicetyping-indicator:hover {
+    color: #1c71d8;
+}
+
+/* Status message styling */
+.voicetyping-status {
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.voicetyping-status.error {
+    color: #e01b5c;
+}
+
+.voicetyping-status.success {
+    color: #26a269;
+}
+
+/* Preferences dialog styling */
+.voicetyping-preferences {
+    padding: 20px;
+}
+
+.voicetyping-preferences .action-row {
+    margin-bottom: 12px;
+}
+
+.voicetyping-preferences .test-button {
+    margin-top: 16px;
+}
