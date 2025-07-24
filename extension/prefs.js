@@ -57,6 +57,19 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         });
         group.add(saveButton);
 
+        // Keyboard Shortcuts Group
+        const shortcutsGroup = new Adw.PreferencesGroup({
+            title: _('Keyboard Shortcuts'),
+            description: _('Configure keyboard shortcuts for voice typing functionality.'),
+        });
+        page.add(shortcutsGroup);
+
+        // Start Voice Typing Shortcut
+        const startShortcutRow = new Adw.EntryRow({
+            title: _('Start Voice Typing shortcut'),
+        });
+        shortcutsGroup.add(startShortcutRow);
+
         // Bind settings
         window._settings = this.getSettings();
 
@@ -70,16 +83,23 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
+        // Bind keyboard shortcuts
+        window._settings.bind('shortcut-start-stop', startShortcutRow, 'text',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
         // Save button handler
         saveButton.connect('clicked', () => {
             const apiKey = apiKeyRow.get_text();
             const apiUrl = apiUrlRow.get_text();
+            const startShortcut = startShortcutRow.get_text();
 
             window._settings.set_string('openai-api-key', apiKey);
             window._settings.set_string('openai-api-url', apiUrl);
+            window._settings.set_string('shortcut-start-stop', startShortcut);
 
             console.debug('Settings saved - API Key:', apiKey, 'API URL:', apiUrl);
-
+            console.debug('Shortcuts - Start:', startShortcut);
         });
 
         window.add(page);

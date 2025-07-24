@@ -11,5 +11,10 @@
       <summary>OpenAI API URL</summary>
       <description>URL endpoint for OpenAI API</description>
     </key>
+    <key name="shortcut-start-stop" type="as">
+      <default><![CDATA[['<Control><Alt>space']]]></default>
+      <summary>Start/Stop Voice Typing Shortcut</summary>
+      <description>Keyboard shortcut to start/stop voice typing</description>
+    </key>
   </schema>
 </schemalist>

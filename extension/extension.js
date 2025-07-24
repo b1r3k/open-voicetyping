@@ -18,43 +18,33 @@
 
 import GObject from 'gi://GObject';
 import St from 'gi://St';
+import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
 
-import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-
 const Indicator = GObject.registerClass(
-class Indicator extends PanelMenu.Button {
-    _init(settings) {
-        super._init(0.0, _('Voice Typing'));
+    class Indicator extends PanelMenu.Button {
+        _init(settings) {
+            super._init(0.0, _('Voice Typing'));
 
-        this.settings = settings;
+            this.settings = settings;
 
-        this.add_child(new St.Icon({
-            icon_name: 'audio-input-microphone-symbolic',
-            style_class: 'system-status-icon',
-        }));
+            this.add_child(new St.Icon({
+                icon_name: 'audio-input-microphone-symbolic',
+                style_class: 'system-status-icon',
+            }));
 
-    }
-
-    _startVoiceTyping() {
-        const apiKey = this.settings.get_string('openai-api-key');
-        const apiUrl = this.settings.get_string('openai-api-url');
-
-        if (!apiKey) {
-            Main.notify(_('Voice Typing'), _('Please configure your OpenAI API key in settings'));
-            return;
         }
 
-        Main.notify(_('Voice Typing'), _('Starting voice transcription...'));
-        // TODO: Implement actual voice typing functionality
-    }
-});
+    });
 
 export default class VoiceTypingExtension extends Extension {
     enable() {
+        this._shortcutsBindingIds = [];
         this._settings = this.getSettings();
 
         this._indicator = new Indicator(this._settings);
@@ -62,6 +52,9 @@ export default class VoiceTypingExtension extends Extension {
         this._indicator.menu.addAction(_('Preferences'), () => {
             this.openPreferences();
         });
+
+        // Register global keyboard shortcuts
+        this._registerKeyboardShortcuts();
 
         this._settings.connect('changed::openai-api-key', (settings, key) => {
             console.debug(`${key} = ${settings.get_string(key)}`);
@@ -72,8 +65,83 @@ export default class VoiceTypingExtension extends Extension {
     }
 
     disable() {
+        // Unregister keyboard shortcuts
+        this._unregisterKeyboardShortcuts();
+
         this._indicator.destroy();
         this._indicator = null;
         this._settings = null;
+    }
+
+    _bindShortcut(name, callback) {
+        const ModeType = Shell.hasOwnProperty('ActionMode')
+            ? Shell.ActionMode
+            : Shell.KeyBindingMode;
+
+        Main.wm.addKeybinding(
+            name,
+            this._settings,
+            Meta.KeyBindingFlags.NONE,
+            ModeType.ALL,
+            callback.bind(this),
+        );
+
+        this._shortcutsBindingIds.push(name);
+    }
+
+    _registerKeyboardShortcuts() {
+
+
+        this._bindShortcut('shortcut-start', () => this._onShortcutPressed());
+    }
+
+    _updateShortcuts() {
+        // Unregister old shortcuts
+        this._unregisterKeyboardShortcuts();
+        // Register new shortcuts
+        this._registerKeyboardShortcuts();
+    }
+
+    _unregisterKeyboardShortcuts() {
+        this._shortcutsBindingIds.forEach((id) => Main.wm.removeKeybinding(id));
+        this._shortcutsBindingIds = [];
+    }
+
+    _onShortcutPressed() {
+        console.debug('Voice typing shortcut pressed');
+        Main.notify(_('Voice Typing'), _('Shortcut pressed - starting voice typing'));
+        if (this._isRecording) {
+            this._stopRecording();
+        } else {
+            this._startRecording();
+        }
+    }
+
+    _startRecording() {
+        // This would implement the actual hold-to-talk functionality
+        // You could start recording here and stop when the key is released
+        console.debug('Starting hold recording...');
+
+        // For hold-to-talk, you might want to:
+        // 1. Start recording immediately
+        // 2. Show a visual indicator that recording is active
+        // 3. Stop recording when the key is released
+
+        // Example implementation:
+        this._isRecording = true;
+        this._showRecordingIndicator();
+
+        // You would need to implement key release detection
+        // This could be done by monitoring the key state or using a timer
+    }
+
+    _stopRecording() {
+        this._isRecording = false;
+        this._showRecordingIndicator();
+    }
+
+    _showRecordingIndicator() {
+        // Show a visual indicator that recording is active
+        Main.notify(_('Voice Typing'), _('Recording... Release key to stop'));
     }
 }
