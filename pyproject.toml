@@ -9,6 +9,7 @@ packages = [{include = "voicetyping"}]
 [tool.poetry.dependencies]
 python = "^3.12"
 pydantic-settings = "^2.8.1"
+dbus-next = "^0.2.3"
 
 [build-system]
 requires = ["poetry-core"]

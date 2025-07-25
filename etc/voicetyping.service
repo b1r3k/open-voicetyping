@@ -1,0 +1,18 @@
+[Unit]
+Description=Voice Typing DBus Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+Environment=PYTHONPATH=/home/lukasz/workspace/prototypes/voicetyping
+ExecStart=/home/lukasz/workspace/prototypes/voicetyping/.venv/bin/python -m voicetyping.main
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
