@@ -11,12 +11,14 @@ import signal
 import sys
 from typing import Optional
 from functools import partial
+import time
 
 from dbus_next import BusType
 from dbus_next.aio import MessageBus
 from dbus_next.service import ServiceInterface, method, signal as dbus_signal
 
 from .logging import root_logger
+from .audio import AsyncAudioRecorder
 
 
 class VoiceTypingInterface(ServiceInterface):
@@ -26,16 +28,24 @@ class VoiceTypingInterface(ServiceInterface):
         super().__init__("com.cxlab.VoiceTypingInterface")
         self._is_recording = False
         self._recording_task: Optional[asyncio.Task] = None
+        self._audio_recorder = AsyncAudioRecorder()
         root_logger.info("VoiceTypingInterface initialized")
+        list_devices = self._audio_recorder.list_devices()
+        root_logger.info(f"Available audio devices: {list_devices}")
 
     @method()
-    def StartRecording(self) -> "s":  # noqa: F821
+    async def StartRecording(self) -> "s":  # noqa: F821
         """Start voice recording."""
         if self._is_recording:
             root_logger.warning("Recording already in progress")
             return "already_recording"
 
         try:
+            # Start the audio recorder
+            success = await self._audio_recorder.start()
+            if not success:
+                return "recording_failed"
+
             self._is_recording = True
             # Create a task to handle the recording process
             self._recording_task = asyncio.create_task(self._record_audio())
@@ -48,7 +58,7 @@ class VoiceTypingInterface(ServiceInterface):
             return "recording_failed"
 
     @method()
-    def StopRecording(self) -> "s":  # noqa: F821
+    async def StopRecording(self) -> "s":  # noqa: F821
         """Stop voice recording."""
         if not self._is_recording:
             root_logger.warning("No recording in progress")
@@ -58,6 +68,16 @@ class VoiceTypingInterface(ServiceInterface):
             self._is_recording = False
             if self._recording_task and not self._recording_task.done():
                 self._recording_task.cancel()
+
+            # Stop the audio recorder and get the audio data
+            audio_data = await self._audio_recorder.stop()
+            if audio_data:
+                root_logger.info(f"Captured {len(audio_data)} bytes of audio")
+                # generate a random filename based on mtime
+                filename = f"{time.time()}.wav"
+                self._audio_recorder.save_to_file(audio_data, filename)
+                self.TranscriptionResult("Hello, this is a test transcription.", 0.95)
+
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
             return "recording_stopped"
@@ -85,22 +105,11 @@ class VoiceTypingInterface(ServiceInterface):
         try:
             root_logger.info("Audio recording task started")
 
-            # Simulate recording process
-            # In a real implementation, this would:
-            # 1. Initialize audio capture
-            # 2. Record audio data
-            # 3. Process the audio
-            # 4. Send for transcription
-
+            # Monitor recording state
             while self._is_recording:
                 await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
 
             root_logger.info("Audio recording task completed")
-
-            # Simulate transcription result
-            # In a real implementation, this would send the audio to OpenAI or another service
-            await asyncio.sleep(0.5)  # Simulate processing time
-            self.TranscriptionResult("Hello, this is a test transcription.", 0.95)
 
         except asyncio.CancelledError:
             root_logger.info("Audio recording task cancelled")
