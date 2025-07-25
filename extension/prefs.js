@@ -83,10 +83,19 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
-        // Bind keyboard shortcuts
-        window._settings.bind('shortcut-start-stop', startShortcutRow, 'text',
-            GObject.BindingFlags.BIDIRECTIONAL
-        );
+        // Handle shortcut changes manually since we can't bind directly
+        startShortcutRow.connect('changed', () => {
+            const shortcutText = startShortcutRow.get_text();
+            if (shortcutText) {
+                window._settings.set_strv('shortcut-start-stop', [shortcutText]);
+            }
+        });
+
+        // Load current shortcut value
+        const currentShortcuts = window._settings.get_strv('shortcut-start-stop');
+        if (currentShortcuts.length > 0) {
+            startShortcutRow.set_text(currentShortcuts[0]);
+        }
 
         // Save button handler
         saveButton.connect('clicked', () => {
@@ -96,7 +105,9 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
 
             window._settings.set_string('openai-api-key', apiKey);
             window._settings.set_string('openai-api-url', apiUrl);
-            window._settings.set_string('shortcut-start-stop', startShortcut);
+            if (startShortcut) {
+                window._settings.set_strv('shortcut-start-stop', [startShortcut]);
+            }
 
             console.debug('Settings saved - API Key:', apiKey, 'API URL:', apiUrl);
             console.debug('Shortcuts - Start:', startShortcut);

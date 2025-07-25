@@ -20,11 +20,34 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
+import Gio from 'gi://Gio';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+
+
+class DBusProxy {
+    constructor(service, object_path, interface_name) {
+        console.debug(`DBusProxy: ${service}, ${object_path}, ${interface_name}`);
+        this.proxy = Gio.DBusProxy.new_for_bus_sync(
+            Gio.BusType.SESSION,
+            Gio.DBusProxyFlags.NONE,
+            null,
+            service,
+            object_path,
+            interface_name,
+            null
+        );
+    }
+
+    call(methodName) {
+        console.debug(`DBusProxy: call ${methodName}`);
+        return this.proxy.call_sync(methodName, null, Gio.DBusCallFlags.NONE, -1, null);
+    }
+}
+
 
 const Indicator = GObject.registerClass(
     class Indicator extends PanelMenu.Button {
@@ -55,6 +78,7 @@ export default class VoiceTypingExtension extends Extension {
     enable() {
         this._shortcutsBindingIds = [];
         this._settings = this.getSettings();
+        this._dbusProxy = new DBusProxy('com.cxlab.VoiceTyping', '/com/cxlab/VoiceTyping', 'com.cxlab.VoiceTypingInterface');
 
         this._indicator = new Indicator(this._settings);
         Main.panel.addToStatusArea(this.uuid, this._indicator);
@@ -80,12 +104,15 @@ export default class VoiceTypingExtension extends Extension {
         this._indicator.destroy();
         this._indicator = null;
         this._settings = null;
+        this._dbusProxy = null;
     }
 
     _bindShortcut(name, callback) {
         const ModeType = Shell.hasOwnProperty('ActionMode')
             ? Shell.ActionMode
             : Shell.KeyBindingMode;
+
+        console.debug(`Binding shortcut ${name} to ${this._settings.get_strv(name)}`);
 
         Main.wm.addKeybinding(
             name,
@@ -99,8 +126,6 @@ export default class VoiceTypingExtension extends Extension {
     }
 
     _registerKeyboardShortcuts() {
-
-
         this._bindShortcut('shortcut-start-stop', () => this._onShortcutPressed());
     }
 
@@ -137,13 +162,12 @@ export default class VoiceTypingExtension extends Extension {
         // Example implementation:
         this._isRecording = true;
         this._indicator.setRecordingState(true);
-
-        // You would need to implement key release detection
-        // This could be done by monitoring the key state or using a timer
+        this._dbusProxy.call('StartRecording');
     }
 
     _stopRecording() {
         this._isRecording = false;
         this._indicator.setRecordingState(false);
+        this._dbusProxy.call('StopRecording');
     }
 }
