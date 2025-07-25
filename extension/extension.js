@@ -33,11 +33,20 @@ const Indicator = GObject.registerClass(
 
             this.settings = settings;
 
-            this.add_child(new St.Icon({
+            this.icon = new St.Icon({
                 icon_name: 'audio-input-microphone-symbolic',
                 style_class: 'system-status-icon',
-            }));
+            });
+            this.add_child(this.icon);
 
+        }
+
+        setRecordingState(isRecording) {
+            if (isRecording) {
+                this.icon.add_style_class_name('recording');
+            } else {
+                this.icon.remove_style_class_name('recording');
+            }
         }
 
     });
@@ -92,7 +101,7 @@ export default class VoiceTypingExtension extends Extension {
     _registerKeyboardShortcuts() {
 
 
-        this._bindShortcut('shortcut-start', () => this._onShortcutPressed());
+        this._bindShortcut('shortcut-start-stop', () => this._onShortcutPressed());
     }
 
     _updateShortcuts() {
@@ -108,8 +117,6 @@ export default class VoiceTypingExtension extends Extension {
     }
 
     _onShortcutPressed() {
-        console.debug('Voice typing shortcut pressed');
-        Main.notify(_('Voice Typing'), _('Shortcut pressed - starting voice typing'));
         if (this._isRecording) {
             this._stopRecording();
         } else {
@@ -129,7 +136,7 @@ export default class VoiceTypingExtension extends Extension {
 
         // Example implementation:
         this._isRecording = true;
-        this._showRecordingIndicator();
+        this._indicator.setRecordingState(true);
 
         // You would need to implement key release detection
         // This could be done by monitoring the key state or using a timer
@@ -137,11 +144,6 @@ export default class VoiceTypingExtension extends Extension {
 
     _stopRecording() {
         this._isRecording = false;
-        this._showRecordingIndicator();
-    }
-
-    _showRecordingIndicator() {
-        // Show a visual indicator that recording is active
-        Main.notify(_('Voice Typing'), _('Recording... Release key to stop'));
+        this._indicator.setRecordingState(false);
     }
 }

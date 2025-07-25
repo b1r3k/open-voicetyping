@@ -9,6 +9,11 @@
     color: #1c71d8;
 }
 
+/* Recording state styling */
+.system-status-icon.recording {
+    color: #e01b5c;
+}
+
 /* Status message styling */
 .voicetyping-status {
     font-size: 12px;
