@@ -12,10 +12,11 @@ class GlobalSettings(BaseSettings):
     # defaults
     APP_VERSION: str = __version__
     ENVIRONMENT: str = "dev"
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: str = "DEBUG"
     DEBUG: bool = False
     # required
     APP_NAME: str
+    OPENAI_API_KEY: str
 
 
 settings = GlobalSettings()  # type: ignore[call-arg]

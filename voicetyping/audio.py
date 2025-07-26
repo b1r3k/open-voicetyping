@@ -10,6 +10,7 @@ import wave
 from typing import Optional, Callable, Any
 import numpy as np
 import pyaudio
+from pathlib import Path
 
 from .logging import root_logger
 
@@ -146,7 +147,7 @@ class AudioRecorder:
         total_samples = total_bytes // bytes_per_sample
         return total_samples / self.sample_rate
 
-    def save_audio_to_wav(self, audio_data: bytes, filename: str) -> bool:
+    def save_audio_to_wav(self, audio_data: bytes, filename: str) -> Path | None:
         """Save audio data to a WAV file."""
         try:
             with wave.open(filename, "wb") as wav_file:
@@ -155,10 +156,9 @@ class AudioRecorder:
                 wav_file.setframerate(self.sample_rate)
                 wav_file.writeframes(audio_data)
             root_logger.info(f"Audio saved to {filename}")
-            return True
+            return Path(filename)
         except Exception as e:
             root_logger.error(f"Failed to save audio to {filename}: {e}")
-            return False
 
     def convert_to_numpy(self, audio_data: bytes) -> np.ndarray:
         """Convert audio data to numpy array."""

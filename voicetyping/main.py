@@ -19,6 +19,8 @@ from dbus_next.service import ServiceInterface, method, signal as dbus_signal
 
 from .logging import root_logger
 from .audio import AsyncAudioRecorder
+from .config import settings
+from .openai_client import OpenAITranscriptionModel, OpenAIClient
 
 
 class VoiceTypingInterface(ServiceInterface):
@@ -29,6 +31,7 @@ class VoiceTypingInterface(ServiceInterface):
         self._is_recording = False
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder = AsyncAudioRecorder()
+        self.openai_client = OpenAIClient(settings.OPENAI_API_KEY)
         root_logger.info("VoiceTypingInterface initialized")
         list_devices = self._audio_recorder.list_devices()
         root_logger.info(f"Available audio devices: {list_devices}")
@@ -74,9 +77,12 @@ class VoiceTypingInterface(ServiceInterface):
             if audio_data:
                 root_logger.info(f"Captured {len(audio_data)} bytes of audio")
                 # generate a random filename based on mtime
-                filename = f"{time.time()}.wav"
-                self._audio_recorder.save_to_file(audio_data, filename)
-                self.TranscriptionResult("Hello, this is a test transcription.", 0.95)
+                filename = f"{int(time.time())}.wav"
+                audio_path = self._audio_recorder.save_to_file(audio_data, filename)
+                text = await self.openai_client.create_transcription(
+                    audio_path, OpenAITranscriptionModel.whisper_1, "en"
+                )
+                root_logger.info(f"Transcription response: {text}")
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
@@ -93,11 +99,6 @@ class VoiceTypingInterface(ServiceInterface):
     @dbus_signal()
     def RecordingStateChanged(self, is_recording: bool) -> None:
         """Signal emitted when recording state changes."""
-        pass
-
-    @dbus_signal()
-    def TranscriptionResult(self, text: str, confidence: float) -> None:
-        """Signal emitted when transcription is complete."""
         pass
 
     async def _record_audio(self) -> None:
