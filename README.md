@@ -1,53 +1,27 @@
 [![CI](https://github.com/b1r3k/python-poetry-boilerplate/actions/workflows/ci.yaml/badge.svg)](https://github.com/b1r3k/python-poetry-boilerplate/actions/workflows/ci.yaml)
 
-# Modern python app boilerplate
+# Voicetyping
 
-Included in this boilerplate:
+## Requirements
 
- - [pyenv](https://github.com/pyenv/pyenv) for python version management
- - [poetry](https://python-poetry.org/) for dependency management integrated with pyenv
- - [pre-commit](https://pre-commit.com/) for linting and formatting
- - [pytest](https://docs.pytest.org/en/stable/) for testing
- - [ruff](https://docs.astral.sh/ruff/) for formatting, linting, sorting imports etc.
- - [mypy](https://mypy.readthedocs.io/en/stable/) for static type checking
- - [pydantic/pydantic-settings](https://github.com/pydantic/pydantic-settings) for settings management using pydantic, allows overriding settings values by environment variables
- - root logger based on settings
+## Permisions for virtual keyboard
 
-## What is going on?
+Backend uses python-uinput for simulating keyboard from text transcript. On many linux systems `/dev/uinput` file is forbidden to be accessed without root priviliges.
 
-Pyenv selects python version according to .python-version file in the root of the project. Poetry creates virtualenv in .venv directory in the root of the project. Pre-commit installs hooks in .git/hooks folder. Ruff is used by pre-commit to format, lint, sort imports etc.
+   $ ls -lau /dev/input
+   crw------- 1 root root 10, 223 Jul 27 14:47 /dev/uinput
 
+On the other hand it's bit problematic to give random application access to root therefore I prefer to use group `input` and give it write permissions to `/dev/uninput` file. Here are the steps to do that:
 
-## How to start
+1. sudo usermod -aG input <USER>
+2. create /etc/udev/rules.d/99-uinput.rules with following contents:
 
-1. Make sure you have python required interpreter installed in pyenv e.g.
-2. Rename project:
- - Rename app folder to your app name if needed (`mv voicetyping new_voicetyping`) and then:
-
-       find ./ -type f -not -path "./.git/*" -exec sed -i 's/voicetyping/new_voicetyping/g' {} \;
-       find ./ -type f -not -path "./.git/*" -exec sed -i 's/voicetyping/new-voicetyping/g' {} \;
- - or use `make rename-project NEW_APP_NAME=new_voicetyping` to do it for you
-
-3. `make install`
-4. `make test`
-5. Make sure it's working: `poetry run app-cli "Developer"`
-6. Optionally, squeeze history into one commit: `git reset $(git commit-tree HEAD^{tree} -m "Initial commit")`
-
-## Other useful commands
-
- - Check current poetry virtualenv and change it
-
-```bash
-   $ poetry env info
-   $ poetry env list
-   $ poetry env remove /home/PATH/bin/python
-   $ make install
+```
+KERNEL=="uinput", GROUP="input", MODE="0660"
 ```
 
- - Cherry-pick commit from repository cloned from this one:
+3. sudo udevadm control --reload-rules
+4. sudo udevadm trigger
 
-```bash
-   $ git remote add projectB /home/you/projectB
-   $ git fetch projectB
-   $ git cherry-pick <commit from projectB repo>
-```
+   $ ls -lau /dev/input
+   crw-rw---- 1 root input 10, 223 Jul 27 14:47 /dev/uinput

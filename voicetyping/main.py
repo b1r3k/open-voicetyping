@@ -21,6 +21,7 @@ from .logging import root_logger
 from .audio import AsyncAudioRecorder
 from .config import settings
 from .openai_client import OpenAITranscriptionModel, OpenAIClient
+from .virtual_keyboard import VirtualKeyboard
 
 
 class VoiceTypingInterface(ServiceInterface):
@@ -32,6 +33,7 @@ class VoiceTypingInterface(ServiceInterface):
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder = AsyncAudioRecorder()
         self.openai_client = OpenAIClient(settings.OPENAI_API_KEY)
+        self.virtual_keyboard = VirtualKeyboard()
         root_logger.info("VoiceTypingInterface initialized")
         list_devices = self._audio_recorder.list_devices()
         root_logger.info(f"Available audio devices: {list_devices}")
@@ -82,7 +84,9 @@ class VoiceTypingInterface(ServiceInterface):
                 text = await self.openai_client.create_transcription(
                     audio_path, OpenAITranscriptionModel.whisper_1, "en"
                 )
+                text = text.decode("utf-8").strip()
                 root_logger.info(f"Transcription response: {text}")
+                self.virtual_keyboard.type_text(text)
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
