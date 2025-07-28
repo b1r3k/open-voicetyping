@@ -114,13 +114,22 @@ export default class VoiceTypingExtension extends Extension {
 
         console.debug(`Binding shortcut ${name} to ${this._settings.get_strv(name)}`);
 
-        Main.wm.addKeybinding(
-            name,
-            this._settings,
-            Meta.KeyBindingFlags.NONE,
-            ModeType.ALL,
-            callback.bind(this),
-        );
+        try {
+            var ret = Main.wm.addKeybinding(
+                name,
+                this._settings,
+                Meta.KeyBindingFlags.NONE,
+                ModeType.ALL,
+                callback.bind(this),
+            );
+            if (ret) {
+                console.debug(`Successfully bound shortcut ${name}`);
+            } else {
+                console.error(`Failed to bind shortcut ${name}`);
+            }
+        } catch (error) {
+            console.error(`Failed to bind shortcut ${name}:`, error);
+        }
 
         this._shortcutsBindingIds.push(name);
     }
