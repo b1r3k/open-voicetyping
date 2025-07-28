@@ -214,6 +214,6 @@ class AsyncAudioRecorder:
         """List available audio devices."""
         return self._recorder.list_audio_devices()
 
-    def save_to_file(self, audio_data: bytes, filename: str) -> bool:
+    async def save_to_file(self, audio_data: bytes, filename: str) -> bool:
         """Save audio data to file."""
-        return self._recorder.save_audio_to_wav(audio_data, filename)
+        return await asyncio.to_thread(self._recorder.save_audio_to_wav, audio_data, filename)

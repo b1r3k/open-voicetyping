@@ -24,6 +24,28 @@ from .openai_client import OpenAITranscriptionModel, OpenAIClient
 from .virtual_keyboard import VirtualKeyboard
 
 
+class VoiceTypist:
+    def __init__(self):
+        self.queue = asyncio.Queue()
+        self.virtual_keyboard = VirtualKeyboard(emit_delay=0.005)
+
+    def add_to_queue(self, text: str):
+        self.queue.put_nowait(text)
+
+    async def process_queue(self):
+        try:
+            while True:
+                text = await self.queue.get()
+                await asyncio.to_thread(self.virtual_keyboard.type_text, text)
+        except asyncio.CancelledError:
+            root_logger.info("VoiceTypist processing queue cancelled")
+        except Exception as e:
+            root_logger.error(f"Error in VoiceTypist processing queue: {e}")
+
+    def close(self):
+        self.virtual_keyboard.close()
+
+
 class VoiceTypingInterface(ServiceInterface):
     """DBus interface for voice typing operations."""
 
@@ -33,14 +55,20 @@ class VoiceTypingInterface(ServiceInterface):
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder = AsyncAudioRecorder()
         self.openai_client = OpenAIClient(settings.OPENAI_API_KEY)
-        self.virtual_keyboard = VirtualKeyboard()
+        self.voice_typist = VoiceTypist()
+        self._processing_task = asyncio.create_task(self.voice_typist.process_queue())
         root_logger.info("VoiceTypingInterface initialized")
         list_devices = self._audio_recorder.list_devices()
         root_logger.info(f"Available audio devices: {list_devices}")
 
+    def close(self):
+        self.voice_typist.close()
+        self._processing_task.cancel()
+
     @method()
     async def StartRecording(self) -> "s":  # noqa: F821
         """Start voice recording."""
+
         if self._is_recording:
             root_logger.warning("Recording already in progress")
             return "already_recording"
@@ -52,8 +80,6 @@ class VoiceTypingInterface(ServiceInterface):
                 return "recording_failed"
 
             self._is_recording = True
-            # Create a task to handle the recording process
-            self._recording_task = asyncio.create_task(self._record_audio())
             root_logger.info("Started voice recording")
             self.RecordingStateChanged(True)
             return "recording_started"
@@ -71,8 +97,6 @@ class VoiceTypingInterface(ServiceInterface):
 
         try:
             self._is_recording = False
-            if self._recording_task and not self._recording_task.done():
-                self._recording_task.cancel()
 
             # Stop the audio recorder and get the audio data
             audio_data = await self._audio_recorder.stop()
@@ -80,13 +104,13 @@ class VoiceTypingInterface(ServiceInterface):
                 root_logger.info(f"Captured {len(audio_data)} bytes of audio")
                 # generate a random filename based on mtime
                 filename = f"{int(time.time())}.wav"
-                audio_path = self._audio_recorder.save_to_file(audio_data, filename)
+                audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
                 text = await self.openai_client.create_transcription(
                     audio_path, OpenAITranscriptionModel.whisper_1, "en"
                 )
                 text = text.decode("utf-8").strip()
                 root_logger.info(f"Transcription response: {text}")
-                self.virtual_keyboard.type_text(text)
+                self.voice_typist.add_to_queue(text)
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
@@ -104,24 +128,6 @@ class VoiceTypingInterface(ServiceInterface):
     def RecordingStateChanged(self, is_recording: bool) -> None:
         """Signal emitted when recording state changes."""
         pass
-
-    async def _record_audio(self) -> None:
-        """Background task to handle audio recording."""
-        try:
-            root_logger.info("Audio recording task started")
-
-            # Monitor recording state
-            while self._is_recording:
-                await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
-
-            root_logger.info("Audio recording task completed")
-
-        except asyncio.CancelledError:
-            root_logger.info("Audio recording task cancelled")
-        except Exception as e:
-            root_logger.error(f"Error in audio recording task: {e}")
-            self._is_recording = False
-            self.RecordingStateChanged(False)
 
 
 class VoiceTypingService:
@@ -169,6 +175,7 @@ class VoiceTypingService:
             root_logger.debug(f"Error stopping DBus service: {e}")
         finally:
             root_logger.info("Voice Typing DBus service stopped")
+            self.interface.close()
 
     def _signal_handler(self, signum: int, loop: asyncio.AbstractEventLoop) -> None:
         """Handle shutdown signals."""
@@ -184,8 +191,8 @@ async def main() -> None:
         await service.start()
     except KeyboardInterrupt:
         root_logger.info("Interrupted by user")
-    except Exception as e:
-        root_logger.error(f"Service error: {e}")
+    except Exception:
+        root_logger.exception("Service error:")
     finally:
         await service.stop()
 

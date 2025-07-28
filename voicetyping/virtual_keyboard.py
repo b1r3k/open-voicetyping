@@ -1,57 +1,21 @@
 import uinput
+import time
+from uinput import _CHAR_MAP
 
+CHAR_TO_KEY = _CHAR_MAP.copy()
 
-# Mapping lowercase characters to keycodes
-CHAR_TO_KEY = {
-    "a": uinput.KEY_A,
-    "b": uinput.KEY_B,
-    "c": uinput.KEY_C,
-    "d": uinput.KEY_D,
-    "e": uinput.KEY_E,
-    "f": uinput.KEY_F,
-    "g": uinput.KEY_G,
-    "h": uinput.KEY_H,
-    "i": uinput.KEY_I,
-    "j": uinput.KEY_J,
-    "k": uinput.KEY_K,
-    "l": uinput.KEY_L,
-    "m": uinput.KEY_M,
-    "n": uinput.KEY_N,
-    "o": uinput.KEY_O,
-    "p": uinput.KEY_P,
-    "q": uinput.KEY_Q,
-    "r": uinput.KEY_R,
-    "s": uinput.KEY_S,
-    "t": uinput.KEY_T,
-    "u": uinput.KEY_U,
-    "v": uinput.KEY_V,
-    "w": uinput.KEY_W,
-    "x": uinput.KEY_X,
-    "y": uinput.KEY_Y,
-    "z": uinput.KEY_Z,
-    "0": uinput.KEY_0,
-    "1": uinput.KEY_1,
-    "2": uinput.KEY_2,
-    "3": uinput.KEY_3,
-    "4": uinput.KEY_4,
-    "5": uinput.KEY_5,
-    "6": uinput.KEY_6,
-    "7": uinput.KEY_7,
-    "8": uinput.KEY_8,
-    "9": uinput.KEY_9,
-    " ": uinput.KEY_SPACE,
-    "\n": uinput.KEY_ENTER,
-    ".": uinput.KEY_DOT,
-    ",": uinput.KEY_COMMA,
-    "-": uinput.KEY_MINUS,
-    "=": uinput.KEY_EQUAL,
-    "/": uinput.KEY_SLASH,
-    "\\": uinput.KEY_BACKSLASH,
-    ";": uinput.KEY_SEMICOLON,
-    "'": uinput.KEY_APOSTROPHE,
-    "[": uinput.KEY_LEFTBRACE,
-    "]": uinput.KEY_RIGHTBRACE,
-}
+CHAR_TO_KEY.update(
+    {
+        "'": uinput.KEY_APOSTROPHE,
+        ";": uinput.KEY_SEMICOLON,
+        "-": uinput.KEY_MINUS,
+        "=": uinput.KEY_EQUAL,
+        "`": uinput.KEY_GRAVE,
+        ",": uinput.KEY_COMMA,
+        ".": uinput.KEY_DOT,
+        "/": uinput.KEY_SLASH,
+    }
+)
 
 SHIFTED_CHARS = {
     "!": "1",
@@ -75,23 +39,40 @@ SHIFTED_CHARS = {
     "}": "]",
 }
 
+ALTERNATE_CHARS = {
+    "ą": "a",
+    "ć": "c",
+    "ę": "e",
+    "ł": "l",
+    "ń": "n",
+    "ó": "o",
+    "ś": "s",
+    "ź": "z",
+    "ż": "z",
+}
+
 
 class VirtualKeyboard:
-    def __init__(self):
+    def __init__(self, emit_delay=0.025):
         self.events = set(CHAR_TO_KEY.values())
-        self.events.update([uinput.KEY_LEFTSHIFT])  # For shiftable chars
+        self.events.update([uinput.KEY_LEFTSHIFT, uinput.KEY_LEFTALT])  # For shiftable/alt chars
+        self.emit_delay = emit_delay
         self.device = uinput.Device(self.events)
 
-    def type_char(self, char):
-        shift = False
+    def type_char(self, device, char):
+        combo = []
 
         if char.isupper():
-            shift = True
             char = char.lower()
+            combo.append(uinput.KEY_LEFTSHIFT)
 
-        elif char in SHIFTED_CHARS:
-            shift = True
+        if char in SHIFTED_CHARS:
             char = SHIFTED_CHARS[char]
+            combo.append(uinput.KEY_LEFTSHIFT)
+
+        if char in ALTERNATE_CHARS:
+            char = ALTERNATE_CHARS[char]
+            combo.append(uinput.KEY_LEFTALT)
 
         key = CHAR_TO_KEY.get(char)
 
@@ -99,15 +80,19 @@ class VirtualKeyboard:
             print(f"Skipping unsupported char: '{char}'")
             return
 
-        if shift:
-            self.device.emit(uinput.KEY_LEFTSHIFT, 1)
-        self.device.emit_click(key)
-        if shift:
-            self.device.emit(uinput.KEY_LEFTSHIFT, 0)
+        if combo:
+            device.emit_combo(combo + [key])
+        else:
+            device.emit_click(key)
 
     def type_text(self, text):
         try:
             for char in text:
-                self.type_char(char)
+                self.type_char(self.device, char)
+                if self.emit_delay > 0:
+                    time.sleep(self.emit_delay)
         except Exception as e:
             print(f"Error typing text: {e}")
+
+    def close(self):
+        self.device.destroy()
