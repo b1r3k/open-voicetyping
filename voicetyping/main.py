@@ -12,6 +12,7 @@ import sys
 from typing import Optional
 from functools import partial
 import time
+from pathlib import Path
 
 from dbus_next import BusType
 from dbus_next.aio import MessageBus
@@ -24,10 +25,11 @@ from .openai_client import OpenAITranscriptionModel, OpenAIClient
 from .virtual_keyboard import VirtualKeyboard
 
 
-class VoiceTypist:
+class TypingService:
     def __init__(self):
         self.queue = asyncio.Queue()
         self.virtual_keyboard = VirtualKeyboard(emit_delay=0.005)
+        self.processing_task = asyncio.create_task(self.process_queue())
 
     def add_to_queue(self, text: str):
         self.queue.put_nowait(text)
@@ -46,6 +48,28 @@ class VoiceTypist:
         self.virtual_keyboard.close()
 
 
+class TranscriptionService:
+    def __init__(self, model: OpenAITranscriptionModel, api_key: str):
+        self.openai_client = OpenAIClient(api_key)
+        self.model = model
+        self.queue = asyncio.Queue()
+
+    def add_to_queue(self, audio_path: Path, language: str):
+        self.queue.put_nowait((audio_path, language))
+
+    async def process_queue(self):
+        try:
+            while True:
+                audio_data, language = await self.queue.get()
+                text = await self.openai_client.create_transcription(audio_data, self.model, language)
+                text = text.decode("utf-8").strip()
+                yield text
+        except asyncio.CancelledError:
+            root_logger.info("TranscriptionService processing queue cancelled")
+        except Exception as e:
+            root_logger.error(f"Error in TranscriptionService processing queue: {e}")
+
+
 class VoiceTypingInterface(ServiceInterface):
     """DBus interface for voice typing operations."""
 
@@ -54,16 +78,20 @@ class VoiceTypingInterface(ServiceInterface):
         self._is_recording = False
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder = AsyncAudioRecorder()
-        self.openai_client = OpenAIClient(settings.OPENAI_API_KEY)
-        self.voice_typist = VoiceTypist()
-        self._processing_task = asyncio.create_task(self.voice_typist.process_queue())
+        self.transcription_srv = TranscriptionService(OpenAITranscriptionModel.whisper_1, settings.OPENAI_API_KEY)
+        self.typing_srv = TypingService()
+        self._processing_task = asyncio.create_task(self._processing_pipeline())
         root_logger.info("VoiceTypingInterface initialized")
         list_devices = self._audio_recorder.list_devices()
         root_logger.info(f"Available audio devices: {list_devices}")
 
     def close(self):
-        self.voice_typist.close()
+        self.typing_srv.close()
         self._processing_task.cancel()
+
+    async def _processing_pipeline(self):
+        async for text in self.transcription_srv.process_queue():
+            self.typing_srv.add_to_queue(text)
 
     @method()
     async def StartRecording(self) -> "s":  # noqa: F821
@@ -105,12 +133,7 @@ class VoiceTypingInterface(ServiceInterface):
                 # generate a random filename based on mtime
                 filename = f"{int(time.time())}.wav"
                 audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
-                text = await self.openai_client.create_transcription(
-                    audio_path, OpenAITranscriptionModel.whisper_1, "en"
-                )
-                text = text.decode("utf-8").strip()
-                root_logger.info(f"Transcription response: {text}")
-                self.voice_typist.add_to_queue(text)
+                self.transcription_srv.add_to_queue(audio_path, "en")
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
