@@ -16,5 +16,10 @@
       <summary>Start/Stop Voice Typing Shortcut</summary>
       <description>Keyboard shortcut to start/stop voice typing</description>
     </key>
+    <key name="transcription-language" type="s">
+      <default>'en'</default>
+      <summary>Transcription Language</summary>
+      <description>Language for transcription</description>
+    </key>
   </schema>
 </schemalist>

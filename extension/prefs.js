@@ -23,6 +23,15 @@ import GLib from 'gi://GLib';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+// enum for keeping schema keys in sync
+const SchemaKeys = {
+    OPENAI_API_KEY: 'openai-api-key',
+    OPENAI_API_URL: 'openai-api-url',
+    SHORTCUT_START_STOP: 'shortcut-start-stop',
+    TRANSCRIPTION_LANGUAGE: 'transcription-language',
+}
+
+
 export default class VoiceTypingPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         // Use the same GSettings schema as in extension.js
@@ -50,6 +59,11 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         });
         group.add(apiUrlRow);
 
+        const transcriptionLangRow = new Adw.EntryRow({
+            title: _('Transcription Language'),
+        });
+        group.add(transcriptionLangRow);
+
         // Add Save button
         const saveButton = new Gtk.Button({
             label: _('Save Settings'),
@@ -74,12 +88,17 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         window._settings = this.getSettings();
 
         // Bind API Key setting
-        window._settings.bind('openai-api-key', apiKeyRow, 'text',
+        window._settings.bind(SchemaKeys.OPENAI_API_KEY, apiKeyRow, 'text',
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
         // Bind API URL setting
-        window._settings.bind('openai-api-url', apiUrlRow, 'text',
+        window._settings.bind(SchemaKeys.OPENAI_API_URL, apiUrlRow, 'text',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
+        // Bind language setting
+        window._settings.bind(SchemaKeys.TRANSCRIPTION_LANGUAGE, transcriptionLangRow, 'text',
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
@@ -101,10 +120,12 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         saveButton.connect('clicked', () => {
             const apiKey = apiKeyRow.get_text();
             const apiUrl = apiUrlRow.get_text();
+            const transcriptionLang = transcriptionLangRow.get_text();
             const startShortcut = startShortcutRow.get_text();
 
-            window._settings.set_string('openai-api-key', apiKey);
-            window._settings.set_string('openai-api-url', apiUrl);
+            window._settings.set_string(SchemaKeys.OPENAI_API_KEY, apiKey);
+            window._settings.set_string(SchemaKeys.OPENAI_API_URL, apiUrl);
+            window._settings.set_string(SchemaKeys.TRANSCRIPTION_LANGUAGE, transcriptionLang);
             if (startShortcut) {
                 window._settings.set_strv('shortcut-start-stop', [startShortcut]);
             }

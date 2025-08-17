@@ -23,6 +23,8 @@ from .audio import AsyncAudioRecorder
 from .config import settings
 from .openai_client import OpenAITranscriptionModel, OpenAIClient
 from .virtual_keyboard import VirtualKeyboard
+from .gnome_settings import GNOMESettingsReader
+from .const import GNOMESchemaKey
 
 
 class TypingService:
@@ -61,6 +63,7 @@ class TranscriptionService:
         try:
             while True:
                 audio_data, language = await self.queue.get()
+                root_logger.info(f"Processing audio data with model {self.model} and language {language}")
                 text = await self.openai_client.create_transcription(audio_data, self.model, language)
                 text = text.decode("utf-8").strip()
                 yield text
@@ -78,6 +81,7 @@ class VoiceTypingInterface(ServiceInterface):
         self._is_recording = False
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder = AsyncAudioRecorder()
+        self.settings = GNOMESettingsReader("org.gnome.shell.extensions.voicetyping")
         self.transcription_srv = TranscriptionService(OpenAITranscriptionModel.whisper_1, settings.OPENAI_API_KEY)
         self.typing_srv = TypingService()
         self._processing_task = asyncio.create_task(self._processing_pipeline())
@@ -133,7 +137,8 @@ class VoiceTypingInterface(ServiceInterface):
                 # generate a random filename based on mtime
                 filename = f"{int(time.time())}.wav"
                 audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
-                self.transcription_srv.add_to_queue(audio_path, "en")
+                language = self.settings.get_key(GNOMESchemaKey.TRANSCRIPTION_LANGUAGE)
+                self.transcription_srv.add_to_queue(audio_path, language)
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)

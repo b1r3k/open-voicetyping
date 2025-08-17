@@ -14,6 +14,7 @@ pyaudio = "^0.2.14"
 numpy = "^1.26.0"
 httpx = "^0.28.1"
 python-uinput = "^1.0.1"
+pygobject = "^3.52.3"
 
 [build-system]
 requires = ["poetry-core"]
