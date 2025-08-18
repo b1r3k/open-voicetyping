@@ -225,7 +225,7 @@ async def main() -> None:
         await service.stop()
 
 
-def cli() -> None:
+def server() -> None:
     """CLI entry point."""
     try:
         asyncio.run(main())
@@ -239,4 +239,4 @@ def cli() -> None:
 
 
 if __name__ == "__main__":
-    cli()
+    server()
