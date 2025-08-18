@@ -6,6 +6,7 @@ using PyAudio for cross-platform compatibility.
 """
 
 import asyncio
+import os
 import wave
 from typing import Optional, Callable, Any
 import numpy as np
@@ -147,16 +148,17 @@ class AudioRecorder:
         total_samples = total_bytes // bytes_per_sample
         return total_samples / self.sample_rate
 
-    def save_audio_to_wav(self, audio_data: bytes, filename: str) -> Path | None:
+    def save_audio_to_wav(self, audio_data: bytes, filename: Path) -> Path | None:
         """Save audio data to a WAV file."""
         try:
-            with wave.open(filename, "wb") as wav_file:
+            os.makedirs(filename.parent, exist_ok=True)
+            with wave.open(str(filename), "wb") as wav_file:
                 wav_file.setnchannels(self.channels)
                 wav_file.setsampwidth(self._pyaudio.get_sample_size(self.format_type))
                 wav_file.setframerate(self.sample_rate)
                 wav_file.writeframes(audio_data)
             root_logger.info(f"Audio saved to {filename}")
-            return Path(filename)
+            return filename
         except Exception as e:
             root_logger.error(f"Failed to save audio to {filename}: {e}")
 
@@ -214,6 +216,6 @@ class AsyncAudioRecorder:
         """List available audio devices."""
         return self._recorder.list_audio_devices()
 
-    async def save_to_file(self, audio_data: bytes, filename: str) -> bool:
+    async def save_to_file(self, audio_data: bytes, filename: Path) -> bool:
         """Save audio data to file."""
         return await asyncio.to_thread(self._recorder.save_audio_to_wav, audio_data, filename)

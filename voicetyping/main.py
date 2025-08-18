@@ -7,11 +7,12 @@ for the GNOME Shell extension client.
 """
 
 import asyncio
+import hashlib
 import signal
 import sys
-from typing import Optional
+from typing import Optional, AsyncGenerator
 from functools import partial
-import time
+from datetime import datetime
 from pathlib import Path
 
 from dbus_next import BusType
@@ -25,6 +26,13 @@ from .openai_client import OpenAITranscriptionModel, OpenAIClient
 from .virtual_keyboard import VirtualKeyboard
 from .gnome_settings import GNOMESettingsReader
 from .const import GNOMESchemaKey
+
+
+class TranscriptionTask:
+    def __init__(self, audio_path: Path, language: str):
+        self.audio_path = audio_path
+        self.language = language
+        self.transcription = None
 
 
 class TypingService:
@@ -56,17 +64,22 @@ class TranscriptionService:
         self.model = model
         self.queue = asyncio.Queue()
 
-    def add_to_queue(self, audio_path: Path, language: str):
-        self.queue.put_nowait((audio_path, language))
+    def add_to_queue(self, task: TranscriptionTask):
+        self.queue.put_nowait(task)
 
-    async def process_queue(self):
+    async def process_queue(self) -> AsyncGenerator[TranscriptionTask, None]:
         try:
             while True:
-                audio_data, language = await self.queue.get()
-                root_logger.info(f"Processing audio data with model {self.model} and language {language}")
-                text = await self.openai_client.create_transcription(audio_data, self.model, language)
+                transcription_task = await self.queue.get()
+                root_logger.info(
+                    f"Processing audio data with model {self.model} and language {transcription_task.language}"
+                )
+                text = await self.openai_client.create_transcription(
+                    transcription_task.audio_path, self.model, transcription_task.language
+                )
                 text = text.decode("utf-8").strip()
-                yield text
+                transcription_task.transcription = text
+                yield transcription_task
         except asyncio.CancelledError:
             root_logger.info("TranscriptionService processing queue cancelled")
         except Exception as e:
@@ -94,8 +107,15 @@ class VoiceTypingInterface(ServiceInterface):
         self._processing_task.cancel()
 
     async def _processing_pipeline(self):
-        async for text in self.transcription_srv.process_queue():
-            self.typing_srv.add_to_queue(text)
+        async for transcription_task in self.transcription_srv.process_queue():
+            if transcription_task.transcription:
+                transcritption_md5 = hashlib.md5(transcription_task.transcription.encode("utf-8")).hexdigest()
+                transcription_path = (transcription_task.audio_path.parent / transcritption_md5).with_suffix(".txt")
+                with open(transcription_path, "w", encoding="utf-8") as f:
+                    f.write(transcription_task.transcription)
+                self.typing_srv.add_to_queue(transcription_task.transcription)
+            else:
+                root_logger.error(f"Failed to transcribe {transcription_task.audio_path}")
 
     @method()
     async def StartRecording(self) -> "s":  # noqa: F821
@@ -134,11 +154,13 @@ class VoiceTypingInterface(ServiceInterface):
             audio_data = await self._audio_recorder.stop()
             if audio_data:
                 root_logger.info(f"Captured {len(audio_data)} bytes of audio")
-                # generate a random filename based on mtime
-                filename = f"{int(time.time())}.wav"
+                # generate filename in format YYYY-MM-DD_HH-MM-SS.wav
+                now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                md5_hash = hashlib.md5(audio_data).hexdigest()
+                filename = (Path("recordings") / now_str / md5_hash).with_suffix(".wav")
                 audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
                 language = self.settings.get_key(GNOMESchemaKey.TRANSCRIPTION_LANGUAGE)
-                self.transcription_srv.add_to_queue(audio_path, language)
+                self.transcription_srv.add_to_queue(TranscriptionTask(audio_path, language))
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
