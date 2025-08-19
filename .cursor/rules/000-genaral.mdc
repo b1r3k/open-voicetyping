@@ -1,0 +1,9 @@
+---
+description: General behaviour
+globs:
+alwaysApply: true
+---
+
+1. Try hard to generate minimal amount of code that will solve user request
+2. when generating new code stick to the instructions. If you were not asked to create some functionality do not do it.
+3. if you want improve/refactor code but you were not asked to do not do it. Instead provide information on what you would like to achieve and ask if user wants to apply such change.
