@@ -8,6 +8,7 @@ from httpx import URL
 
 from .http_client import AsyncHttpClient
 from .logging import root_logger
+from .const import InferenceProvider
 
 logger = root_logger.getChild(__name__)
 
@@ -47,30 +48,51 @@ class OpenAIModelTTSVoice(str, enum.Enum):
     verse = "verse"
 
 
-class GroqTranscriptionModel(str, enum.Enum):
+class TranscriptionModel(str, enum.Enum):
+    pass
+
+
+class GroqTranscriptionModel(TranscriptionModel):
     whisper_large_v3_turbo = "whisper-large-v3-turbo"
     distil_whisper_large_v3_en = "distil-whisper-large-v3-en"
     whisper_large_v3 = "whisper-large-v3"
 
 
-class OpenAITranscriptionModel(str, enum.Enum):
+class OpenAITranscriptionModel(TranscriptionModel):
     whisper_1 = "whisper-1"
     gpt_4o = "gpt-4o-transcribe"
     gpt_4o_mini = "gpt-4o-mini-transcribe"
 
 
+def transcription_model_from_provider(provider: InferenceProvider, model_str: str) -> TranscriptionModel:
+    match provider:
+        case InferenceProvider.OPENAI:
+            return OpenAITranscriptionModel(model_str)
+        case InferenceProvider.GROQ:
+            return GroqTranscriptionModel(model_str)
+
+
 class OpenAIClient(AsyncHttpClient):
-    HOST = "api.openai.com"
-    VERSION = "v1"
     ENDPOINTS = {
         "speech": "audio/speech",
         "transcription": "audio/transcriptions",
     }
 
-    def __init__(self, api_key: str, json_decode: Callable[[str], Any] = json.loads, **kwargs):
+    def __init__(
+        self,
+        api_key: str,
+        json_decode: Callable[[str], Any] = json.loads,
+        host="api.openai.com",
+        version="v1",
+        base_path="",
+        **kwargs,
+    ):
         super().__init__(**kwargs)
+        self.host = host
+        self.version = version
+        self.base_path = base_path
         self.api_key = api_key
-        self.base_url = URL(scheme="https", host=self.HOST)
+        self.base_url = URL(scheme="https", host=self.host)
         self.json_decode = json_decode
 
     @property
@@ -80,6 +102,9 @@ class OpenAIClient(AsyncHttpClient):
             "Content-Type": "application/json",
         }
 
+    def get_url(self, endpoint: str) -> URL:
+        return self.base_url.join("/".join([self.base_path, self.version, self.ENDPOINTS[endpoint]]))
+
     async def create_speech(
         self,
         input_text: str,
@@ -87,7 +112,7 @@ class OpenAIClient(AsyncHttpClient):
         voice: OpenAIModelTTSVoice,
         output_format: OpenAIAudioFormat = OpenAIAudioFormat.OPUS,
     ):
-        url = self.base_url.join("/".join([self.VERSION, self.ENDPOINTS["speech"]]))
+        url = self.get_url("speech")
         payload = {
             "model": model,
             "voice": voice,
@@ -103,7 +128,7 @@ class OpenAIClient(AsyncHttpClient):
         model: OpenAITranscriptionModel,
         language: str,
     ) -> str:
-        url = self.base_url.join("/".join([self.VERSION, self.ENDPOINTS["transcription"]]))
+        url = self.get_url("transcription")
         headers = self.headers.copy()
         del headers["Content-Type"]
         try:
@@ -146,7 +171,7 @@ class OpenAIClient(AsyncHttpClient):
             model: The model to use for transcription.
             language: The language of the file.
         """
-        url = self.base_url.join("/".join([self.VERSION, self.ENDPOINTS["transcription"]]))
+        url = self.get_url("transcription")
         headers = self.headers.copy()
         del headers["Content-Type"]
         headers["Accept"] = "text/event-stream"
@@ -168,3 +193,16 @@ class OpenAIClient(AsyncHttpClient):
                         continue
                     json_data = self.json_decode(data)
                     yield json_data
+
+
+class GroqClient(OpenAIClient):
+    def __init__(
+        self,
+        api_key: str,
+        json_decode: Callable[[str], Any] = json.loads,
+        host="api.groq.com",
+        version="v1",
+        base_path="openai",
+        **kwargs,
+    ):
+        super().__init__(api_key, json_decode, host, version, base_path, **kwargs)

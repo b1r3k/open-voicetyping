@@ -1,0 +1,10 @@
+---
+description: Launching python project
+globs:
+alwaysApply: true
+---
+
+1. If you want to run python code of this application you need to:
+ - source ~/.zshrc if using zsh in order to activate pyenv
+ - use poetry
+ - in order to run some script you should execute: poetry run python <some_script>

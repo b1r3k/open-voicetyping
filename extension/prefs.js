@@ -19,20 +19,84 @@
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import Adw from 'gi://Adw';
-import GLib from 'gi://GLib';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+
+import { DBusProxy } from './dbus.js';
+
 
 // enum for keeping schema keys in sync
 const SchemaKeys = {
     OPENAI_API_KEY: 'openai-api-key',
     OPENAI_API_URL: 'openai-api-url',
+    GROQ_API_KEY: 'groq-api-key',
+    GROQ_API_URL: 'groq-api-url',
     SHORTCUT_START_STOP: 'shortcut-start-stop',
     TRANSCRIPTION_LANGUAGE: 'transcription-language',
+    INFERENCE_PROVIDER: 'inference-provider',
+    INFERENCE_MODEL: 'inference-model',
 }
 
 
 export default class VoiceTypingPreferences extends ExtensionPreferences {
+    async populateInferenceDropdowns(providerCombo, modelCombo) {
+        try {
+            // Create DBus proxy to connect to the service
+            const proxy = new DBusProxy('com.cxlab.VoiceTyping', '/com/cxlab/VoiceTyping', 'com.cxlab.VoiceTypingInterface');
+
+
+            // Get available inference providers
+            const providers = await proxy.call('GetAvailableInferenceProviders');
+            const providerList = providers.deepUnpack()[0];
+            console.info(`Available inference providers: ${providerList}`);
+
+            // Clear and populate provider combo
+            providerCombo.remove_all();
+            providerList.forEach(provider => {
+                providerCombo.append(provider, provider);
+            });
+
+            // Set default selection if available
+            if (providerList.length > 0) {
+                providerCombo.set_active_id(providerList[0]);
+            }
+
+            // Handle provider change to update models
+            providerCombo.connect('changed', async () => {
+                const selectedProvider = providerCombo.get_active_id();
+                if (selectedProvider) {
+                    try {
+                        // Get available models for selected provider
+                        const models = await proxy.call('GetAvailableProviderModels', selectedProvider);
+                        const modelList = models.deepUnpack()[0];
+
+                        // Clear and populate model combo
+                        modelCombo.remove_all();
+                        modelList.forEach(model => {
+                            modelCombo.append(model, model);
+                        });
+
+                        // Set default selection if available
+                        if (modelList.length > 0) {
+                            modelCombo.set_active_id(modelList[0]);
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch models for provider:', selectedProvider, error);
+                    }
+                }
+            });
+
+            // Trigger initial model population
+            const initialProvider = providerCombo.get_active_id();
+            if (initialProvider) {
+                providerCombo.emit('changed');
+            }
+
+        } catch (error) {
+            console.error('Failed to populate inference dropdowns:', error);
+        }
+    }
+
     fillPreferencesWindow(window) {
         // Use the same GSettings schema as in extension.js
         const page = new Adw.PreferencesPage();
@@ -40,12 +104,30 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         // Add description group
         const descriptionGroup = new Adw.PreferencesGroup({
             title: _('Configuration'),
-            description: _('Configure your OpenAI API credentials to enable voice typing functionality.'),
+            description: _('Configure your AI service API credentials to enable voice typing functionality.'),
         });
         page.add(descriptionGroup);
 
         const group = new Adw.PreferencesGroup();
         page.add(group);
+
+        // Inference Provider dropdown
+        const inferenceProviderRow = new Adw.ActionRow({
+            title: _('Inference Provider'),
+        });
+        const inferenceProviderCombo = new Gtk.ComboBoxText();
+        inferenceProviderRow.add_suffix(inferenceProviderCombo);
+        inferenceProviderRow.activatable_widget = inferenceProviderCombo;
+        group.add(inferenceProviderRow);
+
+        // Inference Model dropdown
+        const inferenceModelRow = new Adw.ActionRow({
+            title: _('Inference Model'),
+        });
+        const inferenceModelCombo = new Gtk.ComboBoxText();
+        inferenceModelRow.add_suffix(inferenceModelCombo);
+        inferenceModelRow.activatable_widget = inferenceModelCombo;
+        group.add(inferenceModelRow);
 
         // API Key setting
         const apiKeyRow = new Adw.EntryRow({
@@ -58,6 +140,37 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             title: _('OpenAI API URL'),
         });
         group.add(apiUrlRow);
+
+        // Groq API Key setting
+        const groqApiKeyRow = new Adw.EntryRow({
+            title: _('Groq API Key'),
+        });
+        group.add(groqApiKeyRow);
+
+        // Groq API URL setting
+        const groqApiUrlRow = new Adw.EntryRow({
+            title: _('Groq API URL'),
+        });
+        group.add(groqApiUrlRow);
+
+        // Function to update API key field visibility based on selected provider
+        const updateApiKeyVisibility = () => {
+            const selectedProvider = inferenceProviderCombo.get_active_id();
+
+            // Show OpenAI fields only when OpenAI is selected
+            apiKeyRow.set_visible(selectedProvider === 'openai');
+            apiUrlRow.set_visible(selectedProvider === 'openai');
+
+            // Show Groq fields only when Groq is selected
+            groqApiKeyRow.set_visible(selectedProvider === 'groq');
+            groqApiUrlRow.set_visible(selectedProvider === 'groq');
+        };
+
+        // Set initial visibility
+        updateApiKeyVisibility();
+
+        // Update visibility when provider changes
+        inferenceProviderCombo.connect('changed', updateApiKeyVisibility);
 
         const transcriptionLangRow = new Adw.EntryRow({
             title: _('Transcription Language'),
@@ -97,6 +210,29 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
+        // Bind Groq API Key setting
+        window._settings.bind(SchemaKeys.GROQ_API_KEY, groqApiKeyRow, 'text',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
+        // Bind Groq API URL setting
+        window._settings.bind(SchemaKeys.GROQ_API_URL, groqApiUrlRow, 'text',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
+        // Bind inference provider setting
+        window._settings.bind(SchemaKeys.INFERENCE_PROVIDER, inferenceProviderCombo, 'active-id',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
+        // Bind inference model setting
+        window._settings.bind(SchemaKeys.INFERENCE_MODEL, inferenceModelCombo, 'active-id',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
+        // Populate inference provider and model dropdowns
+        this.populateInferenceDropdowns(inferenceProviderCombo, inferenceModelCombo);
+
         // Bind language setting
         window._settings.bind(SchemaKeys.TRANSCRIPTION_LANGUAGE, transcriptionLangRow, 'text',
             GObject.BindingFlags.BIDIRECTIONAL
@@ -120,17 +256,27 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         saveButton.connect('clicked', () => {
             const apiKey = apiKeyRow.get_text();
             const apiUrl = apiUrlRow.get_text();
+            const groqApiKey = groqApiKeyRow.get_text();
+            const groqApiUrl = groqApiUrlRow.get_text();
             const transcriptionLang = transcriptionLangRow.get_text();
             const startShortcut = startShortcutRow.get_text();
+            const inferenceProvider = inferenceProviderCombo.get_active_id();
+            const inferenceModel = inferenceModelCombo.get_active_id();
 
             window._settings.set_string(SchemaKeys.OPENAI_API_KEY, apiKey);
             window._settings.set_string(SchemaKeys.OPENAI_API_URL, apiUrl);
+            window._settings.set_string(SchemaKeys.GROQ_API_KEY, groqApiKey);
+            window._settings.set_string(SchemaKeys.GROQ_API_URL, groqApiUrl);
             window._settings.set_string(SchemaKeys.TRANSCRIPTION_LANGUAGE, transcriptionLang);
+            window._settings.set_string(SchemaKeys.INFERENCE_PROVIDER, inferenceProvider);
+            window._settings.set_string(SchemaKeys.INFERENCE_MODEL, inferenceModel);
             if (startShortcut) {
                 window._settings.set_strv('shortcut-start-stop', [startShortcut]);
             }
 
-            console.debug('Settings saved - API Key:', apiKey, 'API URL:', apiUrl);
+            console.debug('Settings saved - OpenAI API Key:', apiKey, 'OpenAI API URL:', apiUrl);
+            console.debug('Groq API Key:', groqApiKey, 'Groq API URL:', groqApiUrl);
+            console.debug('Inference Provider:', inferenceProvider, 'Inference Model:', inferenceModel);
             console.debug('Shortcuts - Start:', startShortcut);
         });
 

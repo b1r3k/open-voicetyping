@@ -27,26 +27,7 @@ import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-
-class DBusProxy {
-    constructor(service, object_path, interface_name) {
-        console.debug(`DBusProxy: ${service}, ${object_path}, ${interface_name}`);
-        this.proxy = Gio.DBusProxy.new_for_bus_sync(
-            Gio.BusType.SESSION,
-            Gio.DBusProxyFlags.NONE,
-            null,
-            service,
-            object_path,
-            interface_name,
-            null
-        );
-    }
-
-    call(methodName) {
-        console.debug(`DBusProxy: call ${methodName}`);
-        return this.proxy.call_sync(methodName, null, Gio.DBusCallFlags.NONE, -1, null);
-    }
-}
+import { DBusProxy } from './dbus.js';
 
 
 const Indicator = GObject.registerClass(
@@ -93,6 +74,18 @@ export default class VoiceTypingExtension extends Extension {
             console.debug(`${key} = ${settings.get_string(key)}`);
         });
         this._settings.connect('changed::openai-api-url', (settings, key) => {
+            console.debug(`${key} = ${settings.get_string(key)}`);
+        });
+        this._settings.connect('changed::groq-api-key', (settings, key) => {
+            console.debug(`${key} = ${settings.get_string(key)}`);
+        });
+        this._settings.connect('changed::groq-api-url', (settings, key) => {
+            console.debug(`${key} = ${settings.get_string(key)}`);
+        });
+        this._settings.connect('changed::inference-provider', (settings, key) => {
+            console.debug(`${key} = ${settings.get_string(key)}`);
+        });
+        this._settings.connect('changed::inference-model', (settings, key) => {
             console.debug(`${key} = ${settings.get_string(key)}`);
         });
     }

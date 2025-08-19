@@ -11,6 +11,16 @@
       <summary>OpenAI API URL</summary>
       <description>URL endpoint for OpenAI API</description>
     </key>
+    <key name="groq-api-key" type="s">
+      <default>''</default>
+      <summary>Groq API Key</summary>
+      <description>API key for Groq services</description>
+    </key>
+    <key name="groq-api-url" type="s">
+      <default>'https://api.groq.com/v1'</default>
+      <summary>Groq API URL</summary>
+      <description>URL endpoint for Groq API</description>
+    </key>
     <key name="shortcut-start-stop" type="as">
       <default><![CDATA[['<Control><Alt>space']]]></default>
       <summary>Start/Stop Voice Typing Shortcut</summary>
@@ -20,6 +30,16 @@
       <default>'en'</default>
       <summary>Transcription Language</summary>
       <description>Language for transcription</description>
+    </key>
+    <key name="inference-provider" type="s">
+      <default>'openai'</default>
+      <summary>Inference Provider</summary>
+      <description>AI service provider for transcription</description>
+    </key>
+    <key name="inference-model" type="s">
+      <default>'whisper-1'</default>
+      <summary>Inference Model</summary>
+      <description>Model for transcription</description>
     </key>
   </schema>
 </schemalist>

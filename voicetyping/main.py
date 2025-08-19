@@ -21,18 +21,49 @@ from dbus_next.service import ServiceInterface, method, signal as dbus_signal
 
 from .logging import root_logger
 from .audio import AsyncAudioRecorder
-from .config import settings
-from .openai_client import OpenAITranscriptionModel, OpenAIClient
+from .openai_client import (
+    OpenAITranscriptionModel,
+    OpenAIClient,
+    GroqTranscriptionModel,
+    TranscriptionModel,
+    transcription_model_from_provider,
+    GroqClient,
+)
 from .virtual_keyboard import VirtualKeyboard
 from .gnome_settings import GNOMESettingsReader
-from .const import GNOMESchemaKey
+from .const import GNOMESchemaKey, InferenceProvider
+
+
+class TranscriptionClients:
+    def __init__(self, gsettings: GNOMESettingsReader):
+        self.gsettings = gsettings
+        self.clients = {}
+
+    def get(self, provider: InferenceProvider) -> TranscriptionModel:
+        api_key = self._get_api_key(provider)
+        if not api_key:
+            raise ValueError(f"API key not found for provider {provider}")
+
+        match provider:
+            case InferenceProvider.OPENAI:
+                return self.clients.setdefault(provider, OpenAIClient(api_key))
+            case InferenceProvider.GROQ:
+                return self.clients.setdefault(provider, GroqClient(api_key))
+
+    def _get_api_key(self, provider: InferenceProvider) -> str:
+        match provider:
+            case InferenceProvider.OPENAI:
+                return self.gsettings.get_key(GNOMESchemaKey.OPENAI_API_KEY)
+            case InferenceProvider.GROQ:
+                return self.gsettings.get_key(GNOMESchemaKey.GROQ_API_KEY)
 
 
 class TranscriptionTask:
-    def __init__(self, audio_path: Path, language: str):
+    def __init__(self, audio_path: Path, language: str, provider: InferenceProvider, model: TranscriptionModel):
         self.audio_path = audio_path
+        self.provider = provider
+        self.model = model
         self.language = language
-        self.transcription = None
 
 
 class TypingService:
@@ -59,9 +90,8 @@ class TypingService:
 
 
 class TranscriptionService:
-    def __init__(self, model: OpenAITranscriptionModel, api_key: str):
-        self.openai_client = OpenAIClient(api_key)
-        self.model = model
+    def __init__(self, clients: TranscriptionClients):
+        self.clients = clients
         self.queue = asyncio.Queue()
 
     def add_to_queue(self, task: TranscriptionTask):
@@ -72,10 +102,11 @@ class TranscriptionService:
             while True:
                 transcription_task = await self.queue.get()
                 root_logger.info(
-                    f"Processing audio data with model {self.model} and language {transcription_task.language}"
+                    f"Processing audio data with model {transcription_task.provider}/{transcription_task.model} and language {transcription_task.language}"
                 )
-                text = await self.openai_client.create_transcription(
-                    transcription_task.audio_path, self.model, transcription_task.language
+                client = self.clients.get(transcription_task.provider)
+                text = await client.create_transcription(
+                    transcription_task.audio_path, transcription_task.model, transcription_task.language
                 )
                 text = text.decode("utf-8").strip()
                 transcription_task.transcription = text
@@ -95,7 +126,7 @@ class VoiceTypingInterface(ServiceInterface):
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder = AsyncAudioRecorder()
         self.settings = GNOMESettingsReader("org.gnome.shell.extensions.voicetyping")
-        self.transcription_srv = TranscriptionService(OpenAITranscriptionModel.whisper_1, settings.OPENAI_API_KEY)
+        self.transcription_srv = TranscriptionService(TranscriptionClients(self.settings))
         self.typing_srv = TypingService()
         self._processing_task = asyncio.create_task(self._processing_pipeline())
         root_logger.info("VoiceTypingInterface initialized")
@@ -160,7 +191,11 @@ class VoiceTypingInterface(ServiceInterface):
                 filename = (Path("recordings") / now_str / md5_hash).with_suffix(".wav")
                 audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
                 language = self.settings.get_key(GNOMESchemaKey.TRANSCRIPTION_LANGUAGE)
-                self.transcription_srv.add_to_queue(TranscriptionTask(audio_path, language))
+                provider_raw = self.settings.get_key(GNOMESchemaKey.INFERENCE_PROVIDER)
+                provider = InferenceProvider(provider_raw)
+                model_raw = self.settings.get_key(GNOMESchemaKey.INFERENCE_MODEL)
+                model = transcription_model_from_provider(provider, model_raw)
+                self.transcription_srv.add_to_queue(TranscriptionTask(audio_path, language, provider, model))
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
@@ -173,6 +208,21 @@ class VoiceTypingInterface(ServiceInterface):
     def GetRecordingState(self) -> "b":  # noqa: F821
         """Get current recording state."""
         return self._is_recording
+
+    @method()
+    def GetAvailableInferenceProviders(self) -> "as":  # noqa: F821 F722
+        """Get list of available inference providers."""
+        providers = list(provider.value for provider in InferenceProvider)
+        return providers
+
+    @method()
+    def GetAvailableProviderModels(self, provider: "s") -> "as":  # noqa: F821 F722
+        """Get list of available inference providers."""
+        match InferenceProvider(provider):
+            case InferenceProvider.OPENAI:
+                return [model.value for model in OpenAITranscriptionModel]
+            case InferenceProvider.GROQ:
+                return [model.value for model in GroqTranscriptionModel]
 
     @dbus_signal()
     def RecordingStateChanged(self, is_recording: bool) -> None:
