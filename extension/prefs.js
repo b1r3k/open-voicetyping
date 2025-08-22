@@ -33,7 +33,6 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             // Create DBus proxy to connect to the service
             const proxy = new DBusProxy('com.cxlab.VoiceTyping', '/com/cxlab/VoiceTyping', 'com.cxlab.VoiceTypingInterface');
 
-
             // Get available inference providers
             const providers = await proxy.call('GetAvailableInferenceProviders');
             const providerList = providers.deepUnpack()[0];
@@ -45,8 +44,13 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
                 providerCombo.append(provider, provider);
             });
 
-            // Set default selection if available
-            if (providerList.length > 0) {
+            // Set the saved provider value if it exists
+            const settings = this.getSettings();
+            const savedProvider = settings.get_string('inference-provider');
+            if (savedProvider && providerList.includes(savedProvider)) {
+                providerCombo.set_active_id(savedProvider);
+            } else if (providerList.length > 0) {
+                // Fallback to first available provider if saved one not found
                 providerCombo.set_active_id(providerList[0]);
             }
 
@@ -65,8 +69,13 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
                             modelCombo.append(model, model);
                         });
 
-                        // Set default selection if available
-                        if (modelList.length > 0) {
+                        // After populating models, set the saved model value if it exists
+                        const settings = this.getSettings();
+                        const savedModel = settings.get_string('inference-model');
+                        if (savedModel && modelList.includes(savedModel)) {
+                            modelCombo.set_active_id(savedModel);
+                        } else if (modelList.length > 0) {
+                            // Fallback to first available model if saved one not found
                             modelCombo.set_active_id(modelList[0]);
                         }
                     } catch (error) {
@@ -86,7 +95,7 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         }
     }
 
-    fillPreferencesWindow(window) {
+    async fillPreferencesWindow(window) {
         // Use the same GSettings schema as in extension.js
         const page = new Adw.PreferencesPage();
 
@@ -172,7 +181,10 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         });
         shortcutsGroup.add(startShortcutRow);
 
-        // Bind settings
+        // Populate inference provider and model dropdowns FIRST
+        await this.populateInferenceDropdowns(inferenceProviderCombo, inferenceModelCombo);
+
+        // Bind settings AFTER populating dropdowns
         window._settings = this.getSettings();
 
         // Bind API Key setting
@@ -194,9 +206,6 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         window._settings.bind(SchemaKeys.INFERENCE_MODEL, inferenceModelCombo, 'active-id',
             GObject.BindingFlags.BIDIRECTIONAL
         );
-
-        // Populate inference provider and model dropdowns
-        this.populateInferenceDropdowns(inferenceProviderCombo, inferenceModelCombo);
 
         // Bind language setting
         window._settings.bind(SchemaKeys.TRANSCRIPTION_LANGUAGE, transcriptionLangRow, 'text',
