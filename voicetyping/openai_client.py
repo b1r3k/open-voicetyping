@@ -3,6 +3,7 @@ from typing import AsyncGenerator, Callable, Any
 from pathlib import Path
 import mimetypes
 import json
+from abc import ABC, abstractmethod
 
 from httpx import URL
 
@@ -72,7 +73,71 @@ def transcription_model_from_provider(provider: InferenceProvider, model_str: st
             return GroqTranscriptionModel(model_str)
 
 
-class OpenAIClient(AsyncHttpClient):
+class BaseAIClient(AsyncHttpClient, ABC):
+    """Abstract base class for AI service clients."""
+
+    @abstractmethod
+    def __init__(
+        self,
+        api_key: str,
+        json_decode: Callable[[str], Any] = json.loads,
+        host: str = "",
+        version: str = "",
+        base_path: str = "",
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.host = host
+        self.version = version
+        self.base_path = base_path
+        self.api_key = api_key
+        self.base_url = URL(scheme="https", host=self.host)
+        self.json_decode = json_decode
+
+    @property
+    @abstractmethod
+    def headers(self):
+        """Return the headers for API requests."""
+        pass
+
+    @abstractmethod
+    def get_url(self, endpoint: str) -> URL:
+        """Construct the URL for a given endpoint."""
+        pass
+
+    @abstractmethod
+    async def create_speech(
+        self,
+        input_text: str,
+        model: OpenAIModel,
+        voice: OpenAIModelTTSVoice,
+        output_format: OpenAIAudioFormat = OpenAIAudioFormat.OPUS,
+    ):
+        """Create speech from text using TTS."""
+        pass
+
+    @abstractmethod
+    async def create_transcription(
+        self,
+        file_path: Path,
+        model: TranscriptionModel,
+        language: str,
+    ) -> str:
+        """Create transcription from audio file."""
+        pass
+
+    @abstractmethod
+    async def stream_transcription(
+        self,
+        file_path: Path,
+        model: TranscriptionModel,
+        language: str,
+    ) -> AsyncGenerator[Any, None]:
+        """Stream transcription from audio file."""
+        pass
+
+
+class OpenAIClient(BaseAIClient):
     ENDPOINTS = {
         "speech": "audio/speech",
         "transcription": "audio/transcriptions",
@@ -87,13 +152,7 @@ class OpenAIClient(AsyncHttpClient):
         base_path="",
         **kwargs,
     ):
-        super().__init__(**kwargs)
-        self.host = host
-        self.version = version
-        self.base_path = base_path
-        self.api_key = api_key
-        self.base_url = URL(scheme="https", host=self.host)
-        self.json_decode = json_decode
+        super().__init__(api_key, json_decode, host, version, base_path, **kwargs)
 
     @property
     def headers(self):
