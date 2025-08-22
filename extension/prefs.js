@@ -161,13 +161,6 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         });
         group.add(transcriptionLangRow);
 
-        // Add Save button
-        const saveButton = new Gtk.Button({
-            label: _('Save Settings'),
-            css_classes: ['suggested-action'],
-        });
-        group.add(saveButton);
-
         // Keyboard Shortcuts Group
         const shortcutsGroup = new Adw.PreferencesGroup({
             title: _('Keyboard Shortcuts'),
@@ -180,6 +173,13 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             title: _('Start Voice Typing shortcut'),
         });
         shortcutsGroup.add(startShortcutRow);
+
+        // Add Save button
+        const saveButton = new Gtk.Button({
+            label: _('Save Settings'),
+            css_classes: ['suggested-action'],
+        });
+        group.add(saveButton);
 
         // Populate inference provider and model dropdowns FIRST
         await this.populateInferenceDropdowns(inferenceProviderCombo, inferenceModelCombo);
