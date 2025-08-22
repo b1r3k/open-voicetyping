@@ -128,13 +128,13 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         group.add(inferenceModelRow);
 
         // API Key setting
-        const apiKeyRow = new Adw.EntryRow({
+        const apiKeyRow = new Adw.PasswordEntryRow({
             title: _('OpenAI API Key'),
         });
         group.add(apiKeyRow);
 
         // Groq API Key setting
-        const groqApiKeyRow = new Adw.EntryRow({
+        const groqApiKeyRow = new Adw.PasswordEntryRow({
             title: _('Groq API Key'),
         });
         group.add(groqApiKeyRow);
