@@ -27,8 +27,8 @@ mypy = "^1.0.1"
 ruff = "^0.11.0"
 
 [tool.poetry.scripts]
-server = 'voicetyping:main.server'
-transcribe = 'voicetyping:cli.transcribe'
+voicetyping-server = 'voicetyping:main.server'
+voicetyping-transcribe = 'voicetyping:cli.transcribe'
 
 [tool.pytest.ini_options]
 minversion = "7.0"

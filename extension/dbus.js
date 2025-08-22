@@ -6,7 +6,7 @@ export class DBusProxy {
     constructor(service, object_path, interface_name) {
         console.debug(`DBusProxy: ${service}, ${object_path}, ${interface_name}`);
         this.proxy = Gio.DBusProxy.new_for_bus_sync(
-            Gio.BusType.SESSION,
+            Gio.BusType.SYSTEM,
             Gio.DBusProxyFlags.NONE,
             null,
             service,

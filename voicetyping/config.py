@@ -15,8 +15,8 @@ class GlobalSettings(BaseSettings):
     LOG_LEVEL: str = "DEBUG"
     DEBUG: bool = False
     # required
-    APP_NAME: str
-    OPENAI_API_KEY: str
+    APP_NAME: str = "voicetyping"
+    OPENAI_API_KEY: str | None = None
 
 
 settings = GlobalSettings()  # type: ignore[call-arg]

@@ -24,18 +24,7 @@ import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Ex
 
 import { DBusProxy } from './dbus.js';
 
-
-// enum for keeping schema keys in sync
-const SchemaKeys = {
-    OPENAI_API_KEY: 'openai-api-key',
-    OPENAI_API_URL: 'openai-api-url',
-    GROQ_API_KEY: 'groq-api-key',
-    GROQ_API_URL: 'groq-api-url',
-    SHORTCUT_START_STOP: 'shortcut-start-stop',
-    TRANSCRIPTION_LANGUAGE: 'transcription-language',
-    INFERENCE_PROVIDER: 'inference-provider',
-    INFERENCE_MODEL: 'inference-model',
-}
+import { SchemaKeys } from './const.js';
 
 
 export default class VoiceTypingPreferences extends ExtensionPreferences {

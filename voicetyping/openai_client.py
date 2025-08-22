@@ -87,6 +87,11 @@ class BaseAIClient(AsyncHttpClient, ABC):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        assert api_key, "API key is required"
+        assert host, "Host is required"
+        assert version, "Version is required"
+        assert base_path, "Base path is required"
+
         self.host = host
         self.version = version
         self.base_path = base_path

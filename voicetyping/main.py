@@ -28,19 +28,18 @@ from .openai_client import (
     TranscriptionModel,
     transcription_model_from_provider,
     GroqClient,
+    BaseAIClient,
 )
 from .virtual_keyboard import VirtualKeyboard
 from .gnome_settings import GNOMESettingsReader
-from .const import GNOMESchemaKey, InferenceProvider
+from .const import InferenceProvider
 
 
 class TranscriptionClients:
-    def __init__(self, gsettings: GNOMESettingsReader):
-        self.gsettings = gsettings
+    def __init__(self):
         self.clients = {}
 
-    def get(self, provider: InferenceProvider) -> TranscriptionModel:
-        api_key = self._get_api_key(provider)
+    def get(self, provider: InferenceProvider, api_key: str) -> BaseAIClient:
         if not api_key:
             raise ValueError(f"API key not found for provider {provider}")
 
@@ -50,20 +49,21 @@ class TranscriptionClients:
             case InferenceProvider.GROQ:
                 return self.clients.setdefault(provider, GroqClient(api_key))
 
-    def _get_api_key(self, provider: InferenceProvider) -> str:
-        match provider:
-            case InferenceProvider.OPENAI:
-                return self.gsettings.get_key(GNOMESchemaKey.OPENAI_API_KEY)
-            case InferenceProvider.GROQ:
-                return self.gsettings.get_key(GNOMESchemaKey.GROQ_API_KEY)
-
 
 class TranscriptionTask:
-    def __init__(self, audio_path: Path, language: str, provider: InferenceProvider, model: TranscriptionModel):
+    def __init__(
+        self,
+        audio_path: Path,
+        language: str,
+        provider: InferenceProvider,
+        model: TranscriptionModel,
+        client: BaseAIClient,
+    ):
         self.audio_path = audio_path
         self.provider = provider
         self.model = model
         self.language = language
+        self.client = client
 
 
 class TypingService:
@@ -90,8 +90,7 @@ class TypingService:
 
 
 class TranscriptionService:
-    def __init__(self, clients: TranscriptionClients):
-        self.clients = clients
+    def __init__(self):
         self.queue = asyncio.Queue()
 
     def add_to_queue(self, task: TranscriptionTask):
@@ -104,8 +103,7 @@ class TranscriptionService:
                 root_logger.info(
                     f"Processing audio data with model {transcription_task.provider}/{transcription_task.model} and language {transcription_task.language}"
                 )
-                client = self.clients.get(transcription_task.provider)
-                text = await client.create_transcription(
+                text = await transcription_task.client.create_transcription(
                     transcription_task.audio_path, transcription_task.model, transcription_task.language
                 )
                 text = text.decode("utf-8").strip()
@@ -126,7 +124,8 @@ class VoiceTypingInterface(ServiceInterface):
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder = AsyncAudioRecorder()
         self.settings = GNOMESettingsReader("org.gnome.shell.extensions.voicetyping")
-        self.transcription_srv = TranscriptionService(TranscriptionClients(self.settings))
+        self.transcription_srv = TranscriptionService()
+        self.clients = TranscriptionClients()
         self.typing_srv = TypingService()
         self._processing_task = asyncio.create_task(self._processing_pipeline())
         root_logger.info("VoiceTypingInterface initialized")
@@ -172,7 +171,7 @@ class VoiceTypingInterface(ServiceInterface):
             return "recording_failed"
 
     @method()
-    async def StopRecording(self) -> "s":  # noqa: F821
+    async def StopRecording(self, language: "s", provider: "s", model: "s", api_key: "s") -> "s":  # noqa: F821
         """Stop voice recording."""
         if not self._is_recording:
             root_logger.warning("No recording in progress")
@@ -190,12 +189,10 @@ class VoiceTypingInterface(ServiceInterface):
                 md5_hash = hashlib.md5(audio_data).hexdigest()
                 filename = (Path("recordings") / now_str / md5_hash).with_suffix(".wav")
                 audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
-                language = self.settings.get_key(GNOMESchemaKey.TRANSCRIPTION_LANGUAGE)
-                provider_raw = self.settings.get_key(GNOMESchemaKey.INFERENCE_PROVIDER)
-                provider = InferenceProvider(provider_raw)
-                model_raw = self.settings.get_key(GNOMESchemaKey.INFERENCE_MODEL)
-                model = transcription_model_from_provider(provider, model_raw)
-                self.transcription_srv.add_to_queue(TranscriptionTask(audio_path, language, provider, model))
+                provider = InferenceProvider(provider)
+                model = transcription_model_from_provider(provider, model)
+                client = self.clients.get(provider, api_key)
+                self.transcription_srv.add_to_queue(TranscriptionTask(audio_path, language, provider, model, client))
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
@@ -242,7 +239,7 @@ class VoiceTypingService:
     async def start(self) -> None:
         """Start the DBus service."""
         # Connect to the session bus
-        self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
+        self.bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
 
         # Create and export the interface
         self.interface = VoiceTypingInterface()

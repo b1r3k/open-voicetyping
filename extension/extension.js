@@ -28,6 +28,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import { DBusProxy } from './dbus.js';
+import { SchemaKeys, InferenceProvider } from './const.js';
 
 
 const Indicator = GObject.registerClass(
@@ -170,6 +171,20 @@ export default class VoiceTypingExtension extends Extension {
     _stopRecording() {
         this._isRecording = false;
         this._indicator.setRecordingState(false);
-        this._dbusProxy.call('StopRecording');
+        let language = this._settings.get_string(SchemaKeys.TRANSCRIPTION_LANGUAGE);
+        let provider = this._settings.get_string(SchemaKeys.INFERENCE_PROVIDER);
+        let model = this._settings.get_string(SchemaKeys.INFERENCE_MODEL);
+        let api_key = null;
+        switch (provider) {
+            case InferenceProvider.OPENAI:
+                api_key = this._settings.get_string(SchemaKeys.OPENAI_API_KEY);
+                break;
+            case InferenceProvider.GROQ:
+                api_key = this._settings.get_string(SchemaKeys.GROQ_API_KEY);
+                break;
+            default:
+                throw new Error(`Unsupported inference provider: ${provider}`);
+        }
+        this._dbusProxy.call('StopRecording', language, provider, model, api_key);
     }
 }
