@@ -124,23 +124,11 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         });
         group.add(apiKeyRow);
 
-        // API URL setting
-        const apiUrlRow = new Adw.EntryRow({
-            title: _('OpenAI API URL'),
-        });
-        group.add(apiUrlRow);
-
         // Groq API Key setting
         const groqApiKeyRow = new Adw.EntryRow({
             title: _('Groq API Key'),
         });
         group.add(groqApiKeyRow);
-
-        // Groq API URL setting
-        const groqApiUrlRow = new Adw.EntryRow({
-            title: _('Groq API URL'),
-        });
-        group.add(groqApiUrlRow);
 
         // Function to update API key field visibility based on selected provider
         const updateApiKeyVisibility = () => {
@@ -148,11 +136,9 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
 
             // Show OpenAI fields only when OpenAI is selected
             apiKeyRow.set_visible(selectedProvider === 'openai');
-            apiUrlRow.set_visible(selectedProvider === 'openai');
 
             // Show Groq fields only when Groq is selected
             groqApiKeyRow.set_visible(selectedProvider === 'groq');
-            groqApiUrlRow.set_visible(selectedProvider === 'groq');
         };
 
         // Set initial visibility
@@ -194,18 +180,8 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
-        // Bind API URL setting
-        window._settings.bind(SchemaKeys.OPENAI_API_URL, apiUrlRow, 'text',
-            GObject.BindingFlags.BIDIRECTIONAL
-        );
-
         // Bind Groq API Key setting
         window._settings.bind(SchemaKeys.GROQ_API_KEY, groqApiKeyRow, 'text',
-            GObject.BindingFlags.BIDIRECTIONAL
-        );
-
-        // Bind Groq API URL setting
-        window._settings.bind(SchemaKeys.GROQ_API_URL, groqApiUrlRow, 'text',
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
@@ -244,18 +220,14 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         // Save button handler
         saveButton.connect('clicked', () => {
             const apiKey = apiKeyRow.get_text();
-            const apiUrl = apiUrlRow.get_text();
             const groqApiKey = groqApiKeyRow.get_text();
-            const groqApiUrl = groqApiUrlRow.get_text();
             const transcriptionLang = transcriptionLangRow.get_text();
             const startShortcut = startShortcutRow.get_text();
             const inferenceProvider = inferenceProviderCombo.get_active_id();
             const inferenceModel = inferenceModelCombo.get_active_id();
 
             window._settings.set_string(SchemaKeys.OPENAI_API_KEY, apiKey);
-            window._settings.set_string(SchemaKeys.OPENAI_API_URL, apiUrl);
             window._settings.set_string(SchemaKeys.GROQ_API_KEY, groqApiKey);
-            window._settings.set_string(SchemaKeys.GROQ_API_URL, groqApiUrl);
             window._settings.set_string(SchemaKeys.TRANSCRIPTION_LANGUAGE, transcriptionLang);
             window._settings.set_string(SchemaKeys.INFERENCE_PROVIDER, inferenceProvider);
             window._settings.set_string(SchemaKeys.INFERENCE_MODEL, inferenceModel);
@@ -263,8 +235,8 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
                 window._settings.set_strv('shortcut-start-stop', [startShortcut]);
             }
 
-            console.debug('Settings saved - OpenAI API Key:', apiKey, 'OpenAI API URL:', apiUrl);
-            console.debug('Groq API Key:', groqApiKey, 'Groq API URL:', groqApiUrl);
+            console.debug('Settings saved - OpenAI API Key:', apiKey);
+            console.debug('Groq API Key:', groqApiKey);
             console.debug('Inference Provider:', inferenceProvider, 'Inference Model:', inferenceModel);
             console.debug('Shortcuts - Start:', startShortcut);
         });

@@ -74,13 +74,7 @@ export default class VoiceTypingExtension extends Extension {
         this._settings.connect('changed::openai-api-key', (settings, key) => {
             console.debug(`${key} = ${settings.get_string(key)}`);
         });
-        this._settings.connect('changed::openai-api-url', (settings, key) => {
-            console.debug(`${key} = ${settings.get_string(key)}`);
-        });
         this._settings.connect('changed::groq-api-key', (settings, key) => {
-            console.debug(`${key} = ${settings.get_string(key)}`);
-        });
-        this._settings.connect('changed::groq-api-url', (settings, key) => {
             console.debug(`${key} = ${settings.get_string(key)}`);
         });
         this._settings.connect('changed::inference-provider', (settings, key) => {
