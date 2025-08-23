@@ -146,14 +146,11 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         const page = new Adw.PreferencesPage();
 
         // Add description group
-        const descriptionGroup = new Adw.PreferencesGroup({
-            title: _('Configuration'),
+        const inferenceSettingsGroup = new Adw.PreferencesGroup({
+            title: _('Inference platform & model'),
             description: _('Configure your AI service API credentials to enable voice typing functionality.'),
         });
-        page.add(descriptionGroup);
-
-        const group = new Adw.PreferencesGroup();
-        page.add(group);
+        page.add(inferenceSettingsGroup);
 
         // Inference Provider dropdown
         const inferenceProviderRow = new Adw.ActionRow({
@@ -162,7 +159,7 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         const inferenceProviderCombo = new Gtk.ComboBoxText();
         inferenceProviderRow.add_suffix(inferenceProviderCombo);
         inferenceProviderRow.activatable_widget = inferenceProviderCombo;
-        group.add(inferenceProviderRow);
+        inferenceSettingsGroup.add(inferenceProviderRow);
 
         // Inference Model dropdown
         const inferenceModelRow = new Adw.ActionRow({
@@ -171,7 +168,13 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         const inferenceModelCombo = new Gtk.ComboBoxText();
         inferenceModelRow.add_suffix(inferenceModelCombo);
         inferenceModelRow.activatable_widget = inferenceModelCombo;
-        group.add(inferenceModelRow);
+        inferenceSettingsGroup.add(inferenceModelRow);
+
+        const transcriptionGroup = new Adw.PreferencesGroup({
+            title: _('Input/Output configuration'),
+            description: _('Choose audio source and whether to store transcripts'),
+        });
+        page.add(transcriptionGroup);
 
         // Audio Source dropdown
         const audioSourceRow = new Adw.ActionRow({
@@ -180,7 +183,7 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         const audioSourceCombo = new Gtk.ComboBoxText();
         audioSourceRow.add_suffix(audioSourceCombo);
         audioSourceRow.activatable_widget = audioSourceCombo;
-        group.add(audioSourceRow);
+        transcriptionGroup.add(audioSourceRow);
 
         // Store Transcripts checkbox
         const storeTranscriptsRow = new Adw.ActionRow({
@@ -189,22 +192,24 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         const storeTranscriptsCheckbox = new Gtk.CheckButton();
         storeTranscriptsRow.add_suffix(storeTranscriptsCheckbox);
         storeTranscriptsRow.activatable_widget = storeTranscriptsCheckbox;
-        group.add(storeTranscriptsRow);
+        transcriptionGroup.add(storeTranscriptsRow);
 
         // Transcript Path selector (initially hidden)
         const transcriptPathRow = new Adw.ActionRow({
-            title: _('Transcript Path'),
-        });
-        const transcriptPathButton = new Gtk.Button({
-            label: _('Choose Path'),
+            title: _('Transcript storatge path'),
         });
         const transcriptPathLabel = new Gtk.Label({
             label: _('No path selected'),
             xalign: 0,
         });
-        transcriptPathRow.add_suffix(transcriptPathButton);
         transcriptPathRow.add_suffix(transcriptPathLabel);
-        group.add(transcriptPathRow);
+        transcriptionGroup.add(transcriptPathRow);
+        const transcriptPathButtonRow = new Adw.ActionRow();
+        const transcriptPathButton = new Gtk.Button({
+            label: _('Choose Path'),
+        });
+        transcriptPathButtonRow.add_suffix(transcriptPathButton);
+        transcriptionGroup.add(transcriptPathButtonRow);
 
         // Function to update transcript path row visibility
         const updateTranscriptPathVisibility = () => {
@@ -245,13 +250,13 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         const apiKeyRow = new Adw.PasswordEntryRow({
             title: _('OpenAI API Key'),
         });
-        group.add(apiKeyRow);
+        inferenceSettingsGroup.add(apiKeyRow);
 
         // Groq API Key setting
         const groqApiKeyRow = new Adw.PasswordEntryRow({
             title: _('Groq API Key'),
         });
-        group.add(groqApiKeyRow);
+        inferenceSettingsGroup.add(groqApiKeyRow);
 
         // Function to update API key field visibility based on selected provider
         const updateApiKeyVisibility = () => {
@@ -273,27 +278,19 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         const transcriptionLangRow = new Adw.EntryRow({
             title: _('Transcription Language'),
         });
-        group.add(transcriptionLangRow);
-
-        // Keyboard Shortcuts Group
-        const shortcutsGroup = new Adw.PreferencesGroup({
-            title: _('Keyboard Shortcuts'),
-            description: _('Configure keyboard shortcuts for voice typing functionality.'),
-        });
-        page.add(shortcutsGroup);
+        inferenceSettingsGroup.add(transcriptionLangRow);
 
         // Start Voice Typing Shortcut
         const startShortcutRow = new Adw.EntryRow({
-            title: _('Start Voice Typing shortcut'),
+            title: _('Start/stop Voice Typing shortcut'),
         });
-        shortcutsGroup.add(startShortcutRow);
-
+        transcriptionGroup.add(startShortcutRow);
         // Add Save button
         const saveButton = new Gtk.Button({
             label: _('Save Settings'),
             css_classes: ['suggested-action'],
         });
-        group.add(saveButton);
+        transcriptionGroup.add(saveButton);
 
         // Populate inference provider and model dropdowns FIRST
         await this.populateInferenceDropdowns(inferenceProviderCombo, inferenceModelCombo);
