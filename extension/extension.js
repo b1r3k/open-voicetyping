@@ -150,6 +150,7 @@ export default class VoiceTypingExtension extends Extension {
         // This would implement the actual hold-to-talk functionality
         // You could start recording here and stop when the key is released
         console.debug('Starting hold recording...');
+        let device_name = this._settings.get_string(SchemaKeys.AUDIO_DEVICE_NAME);
 
         // For hold-to-talk, you might want to:
         // 1. Start recording immediately
@@ -159,7 +160,7 @@ export default class VoiceTypingExtension extends Extension {
         // Example implementation:
         this._isRecording = true;
         this._indicator.setRecordingState(true);
-        this._dbusProxy.call('StartRecording');
+        this._dbusProxy.call('StartRecording', device_name);
     }
 
     _stopRecording() {

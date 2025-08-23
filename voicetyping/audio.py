@@ -51,19 +51,38 @@ class AudioRecorder:
         if self._pyaudio:
             self._pyaudio.terminate()
 
-    async def start_recording(self) -> bool:
+    async def start_recording(self, device_name: str) -> bool:
         """Start recording audio asynchronously."""
-        if self._is_recording:
-            root_logger.warning("Recording already in progress")
-            return False
+        recording_device = None
+
+        assert device_name is not None, "Device name is required"
+
+        if device_name:
+            # Find the device index by name
+            devices = self.list_audio_devices()
+            for device in devices:
+                if device["name"] == device_name:
+                    recording_device = device
+                    break
+
+        assert recording_device is not None, f"Device index not found for device name: {device_name}"
+        root_logger.debug("Starting recording using: device name: %s", recording_device)
 
         try:
+            # Use the device's native sample rate to avoid compatibility issues
+            device_sample_rate = int(recording_device["sample_rate"])
+            root_logger.debug(f"Using device's native sample rate: {device_sample_rate} Hz")
+
+            # Store the actual sample rate used for later WAV saving
+            self._actual_sample_rate = device_sample_rate
+
             # Open audio stream
             self._stream = self._pyaudio.open(
                 format=self.format_type,
                 channels=self.channels,
-                rate=self.sample_rate,
+                rate=device_sample_rate,  # Use device's native sample rate
                 input=True,
+                input_device_index=recording_device["index"],
                 frames_per_buffer=self.chunk_size,
                 stream_callback=self._audio_callback,
             )
@@ -148,19 +167,74 @@ class AudioRecorder:
         total_samples = total_bytes // bytes_per_sample
         return total_samples / self.sample_rate
 
-    def save_audio_to_wav(self, audio_data: bytes, filename: Path) -> Path | None:
-        """Save audio data to a WAV file."""
+    def save_audio_to_wav(self, audio_data: bytes, filename: Path, target_sample_rate: int = 16000) -> Path | None:
+        """Save audio data to a WAV file with optional sample rate conversion.
+
+        Args:
+            audio_data: Raw audio data bytes
+            filename: Output WAV file path
+            target_sample_rate: Target sample rate for the WAV file (default: 16000 Hz)
+        """
         try:
             os.makedirs(filename.parent, exist_ok=True)
+
+            # Convert audio data to numpy array for processing
+            audio_array = self.convert_to_numpy(audio_data)
+            if audio_array.size == 0:
+                root_logger.error("Failed to convert audio data to numpy array")
+                return None
+
+            # Get the actual sample rate used during recording
+            # We need to track this from when we started recording
+            actual_sample_rate = getattr(self, "_actual_sample_rate", self.sample_rate)
+
+            # Convert sample rate if needed
+            if actual_sample_rate != target_sample_rate:
+                root_logger.info(f"Converting sample rate from {actual_sample_rate} Hz to {target_sample_rate} Hz")
+                audio_array = self._resample_audio(audio_array, actual_sample_rate, target_sample_rate)
+                sample_rate_to_use = target_sample_rate
+            else:
+                sample_rate_to_use = actual_sample_rate
+
             with wave.open(str(filename), "wb") as wav_file:
                 wav_file.setnchannels(self.channels)
                 wav_file.setsampwidth(self._pyaudio.get_sample_size(self.format_type))
-                wav_file.setframerate(self.sample_rate)
-                wav_file.writeframes(audio_data)
-            root_logger.info(f"Audio saved to {filename}")
+                wav_file.setframerate(sample_rate_to_use)
+                wav_file.writeframes(audio_array.tobytes())
+
+            root_logger.info(f"Audio saved to {filename} at {sample_rate_to_use} Hz")
             return filename
         except Exception as e:
             root_logger.error(f"Failed to save audio to {filename}: {e}")
+            return None
+
+    def _resample_audio(self, audio_array: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
+        """Resample audio array to target sample rate using simple decimation/interpolation."""
+        try:
+            if source_rate == target_rate:
+                return audio_array
+
+            # Calculate the ratio for resampling
+            ratio = target_rate / source_rate
+
+            if ratio < 1:  # Downsampling (decimation)
+                # Simple decimation - take every nth sample
+                step = int(1 / ratio)
+                resampled = audio_array[::step]
+                root_logger.debug(f"Downsampled from {source_rate} Hz to {target_rate} Hz (step: {step})")
+            else:  # Upsampling (interpolation)
+                # Simple linear interpolation
+                original_length = len(audio_array)
+                target_length = int(original_length * ratio)
+                indices = np.linspace(0, original_length - 1, target_length)
+                resampled = np.interp(indices, np.arange(original_length), audio_array).astype(np.int16)
+                root_logger.debug(f"Upsampled from {source_rate} Hz to {target_rate} Hz")
+
+            return resampled
+
+        except Exception as e:
+            root_logger.error(f"Failed to resample audio: {e}")
+            return audio_array
 
     def convert_to_numpy(self, audio_data: bytes) -> np.ndarray:
         """Convert audio data to numpy array."""
@@ -196,9 +270,9 @@ class AsyncAudioRecorder:
         self._recorder = AudioRecorder(**kwargs)
         self._on_audio_ready: Optional[Callable[[bytes], None]] = None
 
-    async def start(self) -> bool:
+    async def start(self, device_name: str) -> bool:
         """Start recording."""
-        return await self._recorder.start_recording()
+        return await self._recorder.start_recording(device_name)
 
     async def stop(self) -> Optional[bytes]:
         """Stop recording and return audio data."""
@@ -216,6 +290,12 @@ class AsyncAudioRecorder:
         """List available audio devices."""
         return self._recorder.list_audio_devices()
 
-    async def save_to_file(self, audio_data: bytes, filename: Path) -> bool:
-        """Save audio data to file."""
-        return await asyncio.to_thread(self._recorder.save_audio_to_wav, audio_data, filename)
+    async def save_to_file(self, audio_data: bytes, filename: Path, target_sample_rate: int = 16000) -> bool:
+        """Save audio data to file with optional sample rate conversion.
+
+        Args:
+            audio_data: Raw audio data bytes
+            filename: Output WAV file path
+            target_sample_rate: Target sample rate for the WAV file (default: 16000 Hz)
+        """
+        return await asyncio.to_thread(self._recorder.save_audio_to_wav, audio_data, filename, target_sample_rate)

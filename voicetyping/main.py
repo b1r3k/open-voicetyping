@@ -148,7 +148,7 @@ class VoiceTypingInterface(ServiceInterface):
                 root_logger.error(f"Failed to transcribe {transcription_task.audio_path}")
 
     @method()
-    async def StartRecording(self) -> "s":  # noqa: F821
+    async def StartRecording(self, device_name: "s") -> "s":  # noqa: F821
         """Start voice recording."""
 
         if self._is_recording:
@@ -156,8 +156,8 @@ class VoiceTypingInterface(ServiceInterface):
             return "already_recording"
 
         try:
-            # Start the audio recorder
-            success = await self._audio_recorder.start()
+            # Start the audio recorder with the selected device
+            success = await self._audio_recorder.start(device_name)
             if not success:
                 return "recording_failed"
 
@@ -187,7 +187,8 @@ class VoiceTypingInterface(ServiceInterface):
                 # generate filename in format YYYY-MM-DD_HH-MM-SS.wav
                 now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 md5_hash = hashlib.md5(audio_data).hexdigest()
-                filename = (Path("recordings") / now_str / md5_hash).with_suffix(".wav")
+                filename = (Path.cwd() / Path("recordings") / now_str / md5_hash).with_suffix(".wav")
+                root_logger.info("Saving audio to %s", filename.resolve())
                 audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
                 provider = InferenceProvider(provider)
                 model = transcription_model_from_provider(provider, model)
@@ -220,6 +221,13 @@ class VoiceTypingInterface(ServiceInterface):
                 return [model.value for model in OpenAITranscriptionModel]
             case InferenceProvider.GROQ:
                 return [model.value for model in GroqTranscriptionModel]
+
+    @method()
+    def GetAvailableAudioSources(self) -> "as":  # noqa: F821 F722
+        """Get list of available audio sources for recording."""
+        devices = self._audio_recorder.list_devices()
+        # Return device names in order, the index will be the position in the list
+        return [device["name"] for device in devices]
 
     @dbus_signal()
     def RecordingStateChanged(self, is_recording: bool) -> None:

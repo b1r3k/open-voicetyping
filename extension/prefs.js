@@ -95,6 +95,52 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         }
     }
 
+    async populateAudioSourcesDropdown(audioSourceCombo) {
+        try {
+            // Create DBus proxy to connect to the service
+            const proxy = new DBusProxy('com.cxlab.VoiceTyping', '/com/cxlab/VoiceTyping', 'com.cxlab.VoiceTypingInterface');
+
+            // Get available audio sources (just device names)
+            const audioSources = await proxy.call('GetAvailableAudioSources');
+            const sourceList = audioSources.deepUnpack()[0];
+            console.info(`Available audio sources: ${sourceList}`);
+
+            // Clear and populate audio source combo
+            audioSourceCombo.remove_all();
+
+            // Store device names
+            const deviceNames = [];
+            sourceList.forEach((deviceName) => {
+                deviceNames.push(deviceName);
+                audioSourceCombo.append(deviceName, deviceName);
+            });
+
+            // Set the saved audio device name if it exists
+            const settings = this.getSettings();
+            const savedDeviceName = settings.get_string('audio-device-name');
+            if (savedDeviceName && deviceNames.includes(savedDeviceName)) {
+                // Set the saved device name
+                audioSourceCombo.set_active_id(savedDeviceName);
+            } else if (deviceNames.length > 0) {
+                // Fallback to first available device if no saved one
+                audioSourceCombo.set_active_id(deviceNames[0]);
+            }
+
+            // Handle audio source change to save the selected device name
+            audioSourceCombo.connect('changed', () => {
+                const selectedDeviceName = audioSourceCombo.get_active_id();
+                if (selectedDeviceName) {
+                    const settings = this.getSettings();
+                    settings.set_string('audio-device-name', selectedDeviceName);
+                    console.debug('Audio device name saved:', selectedDeviceName);
+                }
+            });
+
+        } catch (error) {
+            console.error('Failed to populate audio sources dropdown:', error);
+        }
+    }
+
     async fillPreferencesWindow(window) {
         // Use the same GSettings schema as in extension.js
         const page = new Adw.PreferencesPage();
@@ -126,6 +172,15 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         inferenceModelRow.add_suffix(inferenceModelCombo);
         inferenceModelRow.activatable_widget = inferenceModelCombo;
         group.add(inferenceModelRow);
+
+        // Audio Source dropdown
+        const audioSourceRow = new Adw.ActionRow({
+            title: _('Audio Source'),
+        });
+        const audioSourceCombo = new Gtk.ComboBoxText();
+        audioSourceRow.add_suffix(audioSourceCombo);
+        audioSourceRow.activatable_widget = audioSourceCombo;
+        group.add(audioSourceRow);
 
         // API Key setting
         const apiKeyRow = new Adw.PasswordEntryRow({
@@ -184,6 +239,9 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         // Populate inference provider and model dropdowns FIRST
         await this.populateInferenceDropdowns(inferenceProviderCombo, inferenceModelCombo);
 
+        // Populate audio sources dropdown
+        await this.populateAudioSourcesDropdown(audioSourceCombo);
+
         // Bind settings AFTER populating dropdowns
         window._settings = this.getSettings();
 
@@ -204,6 +262,11 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
 
         // Bind inference model setting
         window._settings.bind(SchemaKeys.INFERENCE_MODEL, inferenceModelCombo, 'active-id',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
+        // Bind audio device name setting
+        window._settings.bind(SchemaKeys.AUDIO_DEVICE_NAME, audioSourceCombo, 'active-id',
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
@@ -234,12 +297,14 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             const startShortcut = startShortcutRow.get_text();
             const inferenceProvider = inferenceProviderCombo.get_active_id();
             const inferenceModel = inferenceModelCombo.get_active_id();
+            const audioDeviceName = window._settings.get_string('audio-device-name');
 
             window._settings.set_string(SchemaKeys.OPENAI_API_KEY, apiKey);
             window._settings.set_string(SchemaKeys.GROQ_API_KEY, groqApiKey);
             window._settings.set_string(SchemaKeys.TRANSCRIPTION_LANGUAGE, transcriptionLang);
             window._settings.set_string(SchemaKeys.INFERENCE_PROVIDER, inferenceProvider);
             window._settings.set_string(SchemaKeys.INFERENCE_MODEL, inferenceModel);
+            window._settings.set_string(SchemaKeys.AUDIO_DEVICE_NAME, audioDeviceName);
             if (startShortcut) {
                 window._settings.set_strv('shortcut-start-stop', [startShortcut]);
             }
@@ -247,6 +312,7 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             console.debug('Settings saved - OpenAI API Key:', apiKey);
             console.debug('Groq API Key:', groqApiKey);
             console.debug('Inference Provider:', inferenceProvider, 'Inference Model:', inferenceModel);
+            console.debug('Audio Device Name:', audioDeviceName);
             console.debug('Shortcuts - Start:', startShortcut);
         });
 

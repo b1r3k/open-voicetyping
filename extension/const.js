@@ -12,4 +12,5 @@ export const SchemaKeys = {
     TRANSCRIPTION_LANGUAGE: 'transcription-language',
     INFERENCE_PROVIDER: 'inference-provider',
     INFERENCE_MODEL: 'inference-model',
+    AUDIO_DEVICE_NAME: 'audio-device-name',
 }

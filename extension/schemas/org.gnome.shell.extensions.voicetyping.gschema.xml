@@ -41,5 +41,10 @@
       <summary>Inference Model</summary>
       <description>Model for transcription</description>
     </key>
+    <key name="audio-device-name" type="s">
+      <default>''</default>
+      <summary>Audio Device Name</summary>
+      <description>Name of the selected audio input device for recording</description>
+    </key>
   </schema>
 </schemalist>
