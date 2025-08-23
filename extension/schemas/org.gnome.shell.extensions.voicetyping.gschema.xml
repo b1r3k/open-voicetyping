@@ -46,5 +46,15 @@
       <summary>Audio Device Name</summary>
       <description>Name of the selected audio input device for recording</description>
     </key>
+    <key name="store-transcripts" type="b">
+      <default>false</default>
+      <summary>Store Transcripts</summary>
+      <description>Whether to store voice typing transcripts to a file</description>
+    </key>
+    <key name="transcript-path" type="s">
+      <default>''</default>
+      <summary>Transcript Path</summary>
+      <description>Path where transcripts should be saved</description>
+    </key>
   </schema>
 </schemalist>

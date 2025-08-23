@@ -147,20 +147,18 @@ export default class VoiceTypingExtension extends Extension {
     }
 
     _startRecording() {
-        // This would implement the actual hold-to-talk functionality
-        // You could start recording here and stop when the key is released
-        console.debug('Starting hold recording...');
+        console.debug('Starting recording...');
+        const default_transcript_path = '/tmp/voicetyping';
         let device_name = this._settings.get_string(SchemaKeys.AUDIO_DEVICE_NAME);
+        let store_transcripts = this._settings.get_boolean(SchemaKeys.STORE_TRANSCRIPTS);
+        let transcript_path = default_transcript_path;
+        if (store_transcripts) {
+            transcript_path = this._settings.get_string(SchemaKeys.TRANSCRIPT_PATH) || default_transcript_path;
+        }
 
-        // For hold-to-talk, you might want to:
-        // 1. Start recording immediately
-        // 2. Show a visual indicator that recording is active
-        // 3. Stop recording when the key is released
-
-        // Example implementation:
         this._isRecording = true;
         this._indicator.setRecordingState(true);
-        this._dbusProxy.call('StartRecording', device_name);
+        this._dbusProxy.call('StartRecording', device_name, transcript_path, store_transcripts);
     }
 
     _stopRecording() {

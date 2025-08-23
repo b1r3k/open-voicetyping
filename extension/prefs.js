@@ -182,6 +182,65 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
         audioSourceRow.activatable_widget = audioSourceCombo;
         group.add(audioSourceRow);
 
+        // Store Transcripts checkbox
+        const storeTranscriptsRow = new Adw.ActionRow({
+            title: _('Store Transcripts'),
+        });
+        const storeTranscriptsCheckbox = new Gtk.CheckButton();
+        storeTranscriptsRow.add_suffix(storeTranscriptsCheckbox);
+        storeTranscriptsRow.activatable_widget = storeTranscriptsCheckbox;
+        group.add(storeTranscriptsRow);
+
+        // Transcript Path selector (initially hidden)
+        const transcriptPathRow = new Adw.ActionRow({
+            title: _('Transcript Path'),
+        });
+        const transcriptPathButton = new Gtk.Button({
+            label: _('Choose Path'),
+        });
+        const transcriptPathLabel = new Gtk.Label({
+            label: _('No path selected'),
+            xalign: 0,
+        });
+        transcriptPathRow.add_suffix(transcriptPathButton);
+        transcriptPathRow.add_suffix(transcriptPathLabel);
+        group.add(transcriptPathRow);
+
+        // Function to update transcript path row visibility
+        const updateTranscriptPathVisibility = () => {
+            const storeTranscripts = storeTranscriptsCheckbox.get_active();
+            transcriptPathRow.set_visible(storeTranscripts);
+        };
+
+        // Set initial visibility
+        updateTranscriptPathVisibility();
+
+        // Update visibility when checkbox changes
+        storeTranscriptsCheckbox.connect('toggled', updateTranscriptPathVisibility);
+
+        // Handle path selection
+        transcriptPathButton.connect('clicked', () => {
+            const fileChooser = new Gtk.FileChooserDialog({
+                title: _('Choose Transcript Directory'),
+                transient_for: window,
+                action: Gtk.FileChooserAction.SELECT_FOLDER,
+            });
+
+            fileChooser.add_button(_('Cancel'), Gtk.ResponseType.CANCEL);
+            fileChooser.add_button(_('Select'), Gtk.ResponseType.ACCEPT);
+
+            fileChooser.connect('response', (dialog, response) => {
+                if (response === Gtk.ResponseType.ACCEPT) {
+                    const selectedPath = fileChooser.get_file().get_path();
+                    transcriptPathLabel.set_label(selectedPath);
+                    // The binding will automatically save this to settings
+                }
+                dialog.destroy();
+            });
+
+            fileChooser.show();
+        });
+
         // API Key setting
         const apiKeyRow = new Adw.PasswordEntryRow({
             title: _('OpenAI API Key'),
@@ -275,6 +334,22 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             GObject.BindingFlags.BIDIRECTIONAL
         );
 
+        // Bind store transcripts setting
+        window._settings.bind(SchemaKeys.STORE_TRANSCRIPTS, storeTranscriptsCheckbox, 'active',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
+        // Bind transcript path setting
+        window._settings.bind(SchemaKeys.TRANSCRIPT_PATH, transcriptPathLabel, 'label',
+            GObject.BindingFlags.BIDIRECTIONAL
+        );
+
+        // Load initial transcript path value
+        const initialTranscriptPath = window._settings.get_string(SchemaKeys.TRANSCRIPT_PATH);
+        if (initialTranscriptPath) {
+            transcriptPathLabel.set_label(initialTranscriptPath);
+        }
+
         // Handle shortcut changes manually since we can't bind directly
         startShortcutRow.connect('changed', () => {
             const shortcutText = startShortcutRow.get_text();
@@ -298,6 +373,8 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             const inferenceProvider = inferenceProviderCombo.get_active_id();
             const inferenceModel = inferenceModelCombo.get_active_id();
             const audioDeviceName = window._settings.get_string('audio-device-name');
+            const storeTranscripts = storeTranscriptsCheckbox.get_active();
+            const transcriptPath = transcriptPathLabel.get_label();
 
             window._settings.set_string(SchemaKeys.OPENAI_API_KEY, apiKey);
             window._settings.set_string(SchemaKeys.GROQ_API_KEY, groqApiKey);
@@ -305,6 +382,8 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             window._settings.set_string(SchemaKeys.INFERENCE_PROVIDER, inferenceProvider);
             window._settings.set_string(SchemaKeys.INFERENCE_MODEL, inferenceModel);
             window._settings.set_string(SchemaKeys.AUDIO_DEVICE_NAME, audioDeviceName);
+            window._settings.set_boolean(SchemaKeys.STORE_TRANSCRIPTS, storeTranscripts);
+            window._settings.set_string(SchemaKeys.TRANSCRIPT_PATH, transcriptPath);
             if (startShortcut) {
                 window._settings.set_strv('shortcut-start-stop', [startShortcut]);
             }
@@ -313,6 +392,8 @@ export default class VoiceTypingPreferences extends ExtensionPreferences {
             console.debug('Groq API Key:', groqApiKey);
             console.debug('Inference Provider:', inferenceProvider, 'Inference Model:', inferenceModel);
             console.debug('Audio Device Name:', audioDeviceName);
+            console.debug('Store Transcripts:', storeTranscripts);
+            console.debug('Transcript Path:', transcriptPath);
             console.debug('Shortcuts - Start:', startShortcut);
         });
 

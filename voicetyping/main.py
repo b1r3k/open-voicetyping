@@ -58,12 +58,14 @@ class TranscriptionTask:
         provider: InferenceProvider,
         model: TranscriptionModel,
         client: BaseAIClient,
+        store_transcripts: bool,
     ):
         self.audio_path = audio_path
         self.provider = provider
         self.model = model
         self.language = language
         self.client = client
+        self.store_transcripts = store_transcripts
 
 
 class TypingService:
@@ -138,7 +140,7 @@ class VoiceTypingInterface(ServiceInterface):
 
     async def _processing_pipeline(self):
         async for transcription_task in self.transcription_srv.process_queue():
-            if transcription_task.transcription:
+            if transcription_task.transcription and transcription_task.store_transcripts:
                 transcritption_md5 = hashlib.md5(transcription_task.transcription.encode("utf-8")).hexdigest()
                 transcription_path = (transcription_task.audio_path.parent / transcritption_md5).with_suffix(".txt")
                 with open(transcription_path, "w", encoding="utf-8") as f:
@@ -146,15 +148,24 @@ class VoiceTypingInterface(ServiceInterface):
                 self.typing_srv.add_to_queue(transcription_task.transcription)
             else:
                 root_logger.error(f"Failed to transcribe {transcription_task.audio_path}")
+            if not transcription_task.store_transcripts and transcription_task.audio_path.exists():
+                try:
+                    root_logger.debug(f"Cleaning up audio file {transcription_task.audio_path}")
+                    transcription_task.audio_path.unlink(missing_ok=True)
+                    transcription_task.audio_path.parent.rmdir()
+                except Exception as e:
+                    root_logger.error(f"Failed to delete audio file {transcription_task.audio_path}: {e}")
 
     @method()
-    async def StartRecording(self, device_name: "s") -> "s":  # noqa: F821
+    async def StartRecording(self, device_name: "s", transcript_path: "s", store_transcripts: "b") -> "s":  # noqa: F821
         """Start voice recording."""
 
         if self._is_recording:
             root_logger.warning("Recording already in progress")
             return "already_recording"
 
+        self.transcript_path = transcript_path
+        self.store_transcripts = store_transcripts
         try:
             # Start the audio recorder with the selected device
             success = await self._audio_recorder.start(device_name)
@@ -187,13 +198,15 @@ class VoiceTypingInterface(ServiceInterface):
                 # generate filename in format YYYY-MM-DD_HH-MM-SS.wav
                 now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 md5_hash = hashlib.md5(audio_data).hexdigest()
-                filename = (Path.cwd() / Path("recordings") / now_str / md5_hash).with_suffix(".wav")
+                filename = (Path(self.transcript_path) / now_str / md5_hash).with_suffix(".wav")
                 root_logger.info("Saving audio to %s", filename.resolve())
                 audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
                 provider = InferenceProvider(provider)
                 model = transcription_model_from_provider(provider, model)
                 client = self.clients.get(provider, api_key)
-                self.transcription_srv.add_to_queue(TranscriptionTask(audio_path, language, provider, model, client))
+                self.transcription_srv.add_to_queue(
+                    TranscriptionTask(audio_path, language, provider, model, client, self.store_transcripts)
+                )
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
