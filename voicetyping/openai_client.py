@@ -1,5 +1,5 @@
 import enum
-from typing import AsyncGenerator, Callable, Any
+from typing import AsyncGenerator, Callable, Any, TypeAlias
 from pathlib import Path
 import mimetypes
 import json
@@ -49,8 +49,7 @@ class OpenAIModelTTSVoice(str, enum.Enum):
     verse = "verse"
 
 
-class TranscriptionModel(str, enum.Enum):
-    pass
+TranscriptionModel: TypeAlias = enum.StrEnum
 
 
 class GroqTranscriptionModel(TranscriptionModel):
