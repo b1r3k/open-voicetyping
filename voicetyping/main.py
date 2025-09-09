@@ -322,7 +322,7 @@ def server() -> None:
     except KeyboardInterrupt:
         root_logger.info("Service interrupted")
     except Exception as e:
-        root_logger.error(f"CLI error: {e}")
+        root_logger.error(f"Server error: {e}")
         sys.exit(1)
     finally:
         sys.exit(0)
