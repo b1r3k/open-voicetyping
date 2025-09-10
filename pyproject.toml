@@ -28,6 +28,7 @@ ruff = "^0.11.0"
 
 [tool.poetry.scripts]
 voicetyping-server = 'voicetyping:main.server'
+voicetyping-keyboard = 'voicetyping:keyboard.server'
 voicetyping-transcribe = 'voicetyping:cli.transcribe'
 
 [tool.pytest.ini_options]

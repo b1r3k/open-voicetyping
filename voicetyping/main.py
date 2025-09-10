@@ -30,9 +30,9 @@ from .openai_client import (
     GroqClient,
     BaseAIClient,
 )
-from .virtual_keyboard import VirtualKeyboard
 from .gnome_settings import GNOMESettingsReader
 from .const import InferenceProvider
+from .keyboard.dbus_client import VirtualKeyboardDBusClient
 
 
 class TranscriptionClients:
@@ -66,29 +66,6 @@ class TranscriptionTask:
         self.language = language
         self.client = client
         self.store_transcripts = store_transcripts
-
-
-class TypingService:
-    def __init__(self):
-        self.queue = asyncio.Queue()
-        self.virtual_keyboard = VirtualKeyboard(emit_delay=0.005)
-        self.processing_task = asyncio.create_task(self.process_queue())
-
-    def add_to_queue(self, text: str):
-        self.queue.put_nowait(text)
-
-    async def process_queue(self):
-        try:
-            while True:
-                text = await self.queue.get()
-                await asyncio.to_thread(self.virtual_keyboard.type_text, text)
-        except asyncio.CancelledError:
-            root_logger.info("VoiceTypist processing queue cancelled")
-        except Exception as e:
-            root_logger.error(f"Error in VoiceTypist processing queue: {e}")
-
-    def close(self):
-        self.virtual_keyboard.close()
 
 
 class TranscriptionService:
@@ -128,24 +105,30 @@ class VoiceTypingInterface(ServiceInterface):
         self.settings = GNOMESettingsReader("org.gnome.shell.extensions.voicetyping")
         self.transcription_srv = TranscriptionService()
         self.clients = TranscriptionClients()
-        self.typing_srv = TypingService()
+        self.keyboard_client = VirtualKeyboardDBusClient()
         self._processing_task = asyncio.create_task(self._processing_pipeline())
         root_logger.info("VoiceTypingInterface initialized")
         list_devices = self._audio_recorder.list_devices()
         root_logger.info(f"Available audio devices: {list_devices}")
 
-    def close(self):
-        self.typing_srv.close()
+    async def close(self):
+        await self.keyboard_client.disconnect()
         self._processing_task.cancel()
 
     async def _processing_pipeline(self):
+        # Connect to the keyboard service
+        if not await self.keyboard_client.connect():
+            root_logger.error("Failed to connect to VirtualKeyboard service")
+            return
+
         async for transcription_task in self.transcription_srv.process_queue():
             if transcription_task.transcription and transcription_task.store_transcripts:
                 transcritption_md5 = hashlib.md5(transcription_task.transcription.encode("utf-8")).hexdigest()
                 transcription_path = (transcription_task.audio_path.parent / transcritption_md5).with_suffix(".txt")
                 with open(transcription_path, "w", encoding="utf-8") as f:
                     f.write(transcription_task.transcription)
-                self.typing_srv.add_to_queue(transcription_task.transcription)
+                # Send text to VirtualKeyboard via DBus
+                await self.keyboard_client.emit(transcription_task.transcription)
             else:
                 root_logger.error(f"Failed to transcribe {transcription_task.audio_path}")
             if not transcription_task.store_transcripts and transcription_task.audio_path.exists():
@@ -293,7 +276,8 @@ class VoiceTypingService:
             root_logger.debug(f"Error stopping DBus service: {e}")
         finally:
             root_logger.info("Voice Typing DBus service stopped")
-            self.interface.close()
+            if self.interface:
+                await self.interface.close()
 
     def _signal_handler(self, signum: int, loop: asyncio.AbstractEventLoop) -> None:
         """Handle shutdown signals."""

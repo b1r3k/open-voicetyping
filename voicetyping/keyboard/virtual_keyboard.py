@@ -54,6 +54,7 @@ ALTERNATE_CHARS = {
 
 class VirtualKeyboard:
     def __init__(self, emit_delay=0.025):
+        self.char_to_key = CHAR_TO_KEY.copy()
         self.events = set(CHAR_TO_KEY.values())
         self.events.update([uinput.KEY_LEFTSHIFT, uinput.KEY_LEFTALT])  # For shiftable/alt chars
         self.emit_delay = emit_delay
@@ -74,7 +75,7 @@ class VirtualKeyboard:
             char = ALTERNATE_CHARS[char]
             combo.append(uinput.KEY_LEFTALT)
 
-        key = CHAR_TO_KEY.get(char)
+        key = self.char_to_key.get(char)
 
         if not key:
             print(f"Skipping unsupported char: '{char}'")
