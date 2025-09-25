@@ -51,18 +51,23 @@ KERNEL=="uinput", GROUP="input", MODE="0660"
    $ ls -lau /dev/uinput
    crw-rw---- 1 root input 10, 223 Jul 27 14:47 /dev/uinput
 
-1. Use template for DBus permissions so that extension can communicate with backend via system DBus: `sudo cp etc/voicetyping-dbus-policy.conf /etc/dbus-1/system.d/voicetyping.conf`
-1. Reload DBus configuration: `sudo systemctl reload dbus`
-1. Use template for systemd service: `sudo cp etc/voicetyping-server.service /etc/systemd/system/voicetyping-server.service`
-1. Adjust paths in `/etc/systemd/system/voicetyping-server.service` if needed (e.g. python paths)
-1. Use template for systemd service: `sudo cp etc/voicetyping-keyboard.service /etc/systemd/system/voicetyping-keyboard@voicetyping.service`
-1. Adjust paths in `/etc/systemd/system/voicetyping-keyboard@voicetyping.service` if needed (e.g. python paths)
-1. Enable keyboard service to run as voicetyping user: `sudo systemctl enable voicetyping-keyboard@voicetyping.service`
-1. Enable general service: `sudo systemctl enable voicetyping-server.service`
-1. Finally, start both services: `sudo systemctl start voicetyping-keyboard@voicetyping.service` and `sudo systemctl start voicetyping-server.service`
-1. Create systemd service for core backend:
+There is some DBus policy tweaking necessary to allow gnome shell extension to talk to python backend. There are two systemd services that need to be started:
+  1. voicetyping-keyboard.service is system service that runs as user `voicetyping` and has access to `/dev/uinput` device.
+  2. voicetyping-core.service is user service that runs as user who is logged in gnome session and has access to gnome shell DBus. More importantly it will have access to audio devices and even bluetooth ones (if default audio source is selected in the extension settings).
+
 ```bash
+sudo cp etc/voicetyping-dbus-policy.conf /etc/dbus-1/system.d/voicetyping.conf
+# !! adjust user names
+sudo systemctl reload dbus
+sudo cp etc/voicetyping-keyboard.service /etc/systemd/system/voicetyping-keyboard@voicetyping.service
+# !! adjust python paths
+sudo systemctl enable voicetyping-keyboard@voicetyping.service
+sudo systemctl start voicetyping-keyboard@voicetyping.service
+# run as daily driver user (logging in to gnome session):
 systemctl edit --user --force --full voicetyping-core.service
+# !! paste contents of etc/voicetyping-core.service and adjust python paths
+systemctl enable --user voicetyping-core.service
+systemctl start --user voicetyping-core.service
 ```
 
 **Security warning** it's important to keep access to /dev/uinput very selective both for write and read since that's how malware could get access to whatever user is typing
