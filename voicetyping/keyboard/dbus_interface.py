@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 from typing import Optional
 
 from dbus_next.service import ServiceInterface, method
@@ -51,7 +52,8 @@ class VirtualKeyboardInterface(ServiceInterface):
     @method()
     async def emit(self, text: "s") -> None:  # noqa: F821 F722
         """Start voice recording."""
-        logger.debug(f"Received text to type: {text}")
+        text_hash = hashlib.md5(text.encode())
+        logger.debug("Received text to type, fingerprint: %s", text_hash.hexdigest())
         if not self.typing_service.processing_task:
             await self.typing_service.start()
         self.typing_service.add_to_queue(text)

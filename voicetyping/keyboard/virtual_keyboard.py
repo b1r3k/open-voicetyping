@@ -84,7 +84,6 @@ class VirtualKeyboard:
         key = self.char_to_key.get(char)
 
         if not key:
-            logger.debug("Skipping unsupported char: '%s' ord: %d ", char, ord(char))
             return
 
         if combo:

@@ -1,3 +1,4 @@
+import hashlib
 from typing import Optional
 
 from dbus_next import BusType
@@ -39,8 +40,9 @@ class VirtualKeyboardDBusClient:
             return False
 
         try:
+            text_md5 = hashlib.md5(text.encode()).hexdigest()
             await self.proxy.call_emit(text)
-            logger.debug(f"Successfully sent text to VirtualKeyboard: {text}")
+            logger.debug("Successfully sent text (fingerprint: %s) to VirtualKeyboard", text_md5)
             return True
         except Exception as e:
             logger.error(f"Failed to emit text to VirtualKeyboard: {e}")
