@@ -3,7 +3,8 @@
   "description": "Allows to convert voice to keyboard input on demand",
   "uuid": "voicetyping@cx-lab.com",
   "shell-version": [
-    "47"
+    "47",
+    "48"
   ],
   "url": "https://github.com/cx-lab/voicetyping",
   "version": 1,
