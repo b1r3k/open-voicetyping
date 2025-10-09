@@ -71,3 +71,12 @@ systemctl start --user voicetyping-core.service
 ```
 
 **Security warning** it's important to keep access to /dev/uinput very selective both for write and read since that's how malware could get access to whatever user is typing
+
+## Development
+
+### Default logs
+
+```
+journalctl --user -u voicetyping-core.service --follow
+journalctl -u voicetyping-keyboard@voicetyping.service
+```

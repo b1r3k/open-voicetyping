@@ -20,7 +20,7 @@ from dbus_next.aio import MessageBus
 from dbus_next.service import ServiceInterface, method, signal as dbus_signal
 
 from .logging import root_logger
-from .audio import AsyncAudioRecorder
+from .audio.recorder import AudioRecorder, AudioRecording
 from .openai_client import (
     OpenAITranscriptionModel,
     OpenAIClient,
@@ -101,7 +101,8 @@ class VoiceTypingInterface(ServiceInterface):
         super().__init__("com.cxlab.VoiceTypingInterface")
         self._is_recording = False
         self._recording_task: Optional[asyncio.Task] = None
-        self._audio_recorder = AsyncAudioRecorder()
+        self._audio_recorder = AudioRecorder()
+        self._recording: Optional[AudioRecording] = None
         self.settings = GNOMESettingsReader("org.gnome.shell.extensions.voicetyping")
         self.transcription_srv = TranscriptionService()
         self.clients = TranscriptionClients()
@@ -143,7 +144,7 @@ class VoiceTypingInterface(ServiceInterface):
     async def StartRecording(self, device_name: "s", transcript_path: "s", store_transcripts: "b") -> "s":  # noqa: F821
         """Start voice recording."""
 
-        if self._is_recording:
+        if self._recording and self._recording.is_recording():
             root_logger.warning("Recording already in progress")
             return "already_recording"
 
@@ -151,45 +152,35 @@ class VoiceTypingInterface(ServiceInterface):
         self.store_transcripts = store_transcripts
         try:
             # Start the audio recorder with the selected device
-            success = await self._audio_recorder.start(device_name)
-            if not success:
-                return "recording_failed"
-
-            self._is_recording = True
+            self._recording = self._audio_recorder.create_recording(device_name)
             root_logger.info("Started voice recording")
             self.RecordingStateChanged(True)
             return "recording_started"
         except Exception as e:
             root_logger.error(f"Failed to start recording: {e}")
-            self._is_recording = False
             return "recording_failed"
 
     @method()
     async def StopRecording(self, language: "s", provider: "s", model: "s", api_key: "s") -> "s":  # noqa: F821
         """Stop voice recording."""
-        if not self._is_recording:
+        if self._recording is None or not self._recording.is_recording():
             root_logger.warning("No recording in progress")
             return "not_recording"
 
         try:
-            self._is_recording = False
-
-            # Stop the audio recorder and get the audio data
-            audio_data = await self._audio_recorder.stop()
-            if audio_data:
-                root_logger.info(f"Captured {len(audio_data)} bytes of audio")
-                # generate filename in format YYYY-MM-DD_HH-MM-SS.wav
-                now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                md5_hash = hashlib.md5(audio_data).hexdigest()
-                filename = (Path(self.transcript_path) / now_str / md5_hash).with_suffix(".wav")
-                root_logger.info("Saving audio to %s", filename.resolve())
-                audio_path = await self._audio_recorder.save_to_file(audio_data, filename)
-                provider = InferenceProvider(provider)
-                model = transcription_model_from_provider(provider, model)
-                client = self.clients.get(provider, api_key)
-                self.transcription_srv.add_to_queue(
-                    TranscriptionTask(audio_path, language, provider, model, client, self.store_transcripts)
-                )
+            self._recording.stop()
+            # generate filename in format YYYY-MM-DD_HH-MM-SS
+            now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            md5_hash = self._recording.fingerprint()
+            filename = Path(self.transcript_path) / now_str / md5_hash
+            root_logger.info("Saving audio to %s", filename.resolve())
+            audio_path = self._recording.save(filename)
+            provider = InferenceProvider(provider)
+            model = transcription_model_from_provider(provider, model)
+            client = self.clients.get(provider, api_key)
+            self.transcription_srv.add_to_queue(
+                TranscriptionTask(audio_path, language, provider, model, client, self.store_transcripts)
+            )
 
             root_logger.info("Stopped voice recording")
             self.RecordingStateChanged(False)
@@ -197,11 +188,14 @@ class VoiceTypingInterface(ServiceInterface):
         except Exception as e:
             root_logger.error(f"Failed to stop recording: {e}")
             return "stop_failed"
+        finally:
+            self._recording.cleanup()
+            self._recording = None
 
     @method()
     def GetRecordingState(self) -> "b":  # noqa: F821
         """Get current recording state."""
-        return self._is_recording
+        return self._recording.is_recording()
 
     @method()
     def GetAvailableInferenceProviders(self) -> "as":  # noqa: F821 F722

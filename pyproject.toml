@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "voicetyping"
-version = "0.3.0"
+version = "0.4.0"
 description = ""
 authors = ["Lukasz Jachym <lukasz.jachym@gmail.com>"]
 readme = "README.md"
@@ -15,6 +15,7 @@ numpy = "^1.26.0"
 httpx = "^0.28.1"
 python-uinput = "^1.0.1"
 pygobject = "^3.52.3"
+lameenc = "^1.8.1"
 
 [build-system]
 requires = ["poetry-core"]
@@ -30,6 +31,7 @@ ruff = "^0.11.0"
 voicetyping-server = 'voicetyping:main.server'
 voicetyping-keyboard = 'voicetyping:keyboard.server'
 voicetyping-transcribe = 'voicetyping:cli.transcribe'
+voicetyping-record = 'voicetyping.cli.record:record'
 
 [tool.pytest.ini_options]
 minversion = "7.0"
