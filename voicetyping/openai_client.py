@@ -89,7 +89,7 @@ class BaseAIClient(AsyncHttpClient, ABC):
         assert api_key, "API key is required"
         assert host, "Host is required"
         assert version, "Version is required"
-        assert base_path, "Base path is required"
+        assert base_path is not None, "Base path is required"
 
         self.host = host
         self.version = version

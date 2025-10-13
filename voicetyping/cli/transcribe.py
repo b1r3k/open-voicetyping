@@ -77,27 +77,20 @@ async def transcribe_audio(
     file_path: Path, language: str, model: OpenAITranscriptionModel, output_path: Optional[str] = None
 ) -> str:
     """Transcribe the audio file using OpenAI API."""
+    client = OpenAIClient(settings.OPENAI_API_KEY)
+    root_logger.info(f"Starting transcription of {file_path} with model {model.value} and language {language}")
     try:
-        # Initialize OpenAI client
-        client = OpenAIClient(settings.OPENAI_API_KEY)
-
-        # Perform transcription
-        root_logger.info(f"Starting transcription of {file_path} with model {model.value} and language {language}")
-
         transcription = await client.create_transcription(file_path=file_path, model=model, language=language)
-
-        # Decode the response
+    except Exception as e:
+        root_logger.error(f"Transcription failed: {e}")
+        raise
+    else:
         if isinstance(transcription, bytes):
             text = transcription.decode("utf-8").strip()
         else:
             text = str(transcription).strip()
-
         root_logger.info("Transcription completed successfully")
         return text
-
-    except Exception as e:
-        root_logger.error(f"Transcription failed: {e}")
-        raise
 
 
 def save_transcription(text: str, output_path: str) -> None:
