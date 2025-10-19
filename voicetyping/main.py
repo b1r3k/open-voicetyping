@@ -23,31 +23,15 @@ from .logging import root_logger
 from .audio.recorder import AudioRecorder, AudioRecording
 from .openai_client import (
     OpenAITranscriptionModel,
-    OpenAIClient,
     GroqTranscriptionModel,
     TranscriptionModel,
     transcription_model_from_provider,
-    GroqClient,
     BaseAIClient,
 )
 from .gnome_settings import GNOMESettingsReader
 from .const import InferenceProvider
 from .keyboard.dbus_client import VirtualKeyboardDBusClient
-
-
-class TranscriptionClients:
-    def __init__(self):
-        self.clients = {}
-
-    def get(self, provider: InferenceProvider, api_key: str) -> BaseAIClient:
-        if not api_key:
-            raise ValueError(f"API key not found for provider {provider}")
-
-        match provider:
-            case InferenceProvider.OPENAI:
-                return self.clients.setdefault(provider, OpenAIClient(api_key))
-            case InferenceProvider.GROQ:
-                return self.clients.setdefault(provider, GroqClient(api_key))
+from .transcription_client import TranscriptionClients
 
 
 class TranscriptionTask:

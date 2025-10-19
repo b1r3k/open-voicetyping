@@ -17,6 +17,8 @@ class GlobalSettings(BaseSettings):
     # required
     APP_NAME: str = "voicetyping"
     OPENAI_API_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
+    INFERENCE_PROVIDER: str = "openai"
 
 
 settings = GlobalSettings()  # type: ignore[call-arg]

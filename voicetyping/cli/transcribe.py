@@ -12,7 +12,13 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from ..openai_client import OpenAIClient, OpenAITranscriptionModel
+from ..openai_client import (
+    OpenAITranscriptionModel,
+    GroqTranscriptionModel,
+    transcription_model_from_provider,
+)
+from ..const import InferenceProvider
+from ..transcription_client import TranscriptionClients
 from ..config import settings
 from ..logging import root_logger
 
@@ -26,12 +32,22 @@ def create_parser() -> argparse.ArgumentParser:
 Examples:
   %(prog)s audio.wav
   %(prog)s audio.mp3 --language en
-  %(prog)s audio.flac --model whisper-1 --language pl
+  %(prog)s audio.flac --provider openai --model whisper-1 --language pl
+  %(prog)s audio.wav --provider groq --model whisper-large-v3-turbo
   %(prog)s audio.wav --output transcript.txt
         """,
     )
 
     parser.add_argument("file", type=str, help="Path to the audio file to transcribe")
+
+    parser.add_argument(
+        "--provider",
+        "-p",
+        type=str,
+        choices=[provider.value for provider in InferenceProvider],
+        default=settings.INFERENCE_PROVIDER,
+        help=f"Inference provider to use (default: {settings.INFERENCE_PROVIDER})",
+    )
 
     parser.add_argument(
         "--language", "-l", type=str, default="en", help="Language code for transcription (default: en)"
@@ -41,9 +57,9 @@ Examples:
         "--model",
         "-m",
         type=str,
-        choices=[model.value for model in OpenAITranscriptionModel],
-        default=OpenAITranscriptionModel.whisper_1.value,
-        help=f"Transcription model to use (default: {OpenAITranscriptionModel.whisper_1.value})",
+        help="Transcription model to use. Available models depend on provider. "
+        f"OpenAI: {', '.join(m.value for m in OpenAITranscriptionModel)} "
+        f"Groq: {', '.join(m.value for m in GroqTranscriptionModel)}",
     )
 
     parser.add_argument("--output", "-o", type=str, help="Output file path for transcription (default: stdout)")
@@ -74,11 +90,19 @@ def validate_audio_file(file_path: str) -> Path:
 
 
 async def transcribe_audio(
-    file_path: Path, language: str, model: OpenAITranscriptionModel, output_path: Optional[str] = None
+    file_path: Path,
+    language: str,
+    provider: InferenceProvider,
+    model,
+    api_key: str,
+    output_path: Optional[str] = None,
 ) -> str:
-    """Transcribe the audio file using OpenAI API."""
-    client = OpenAIClient(settings.OPENAI_API_KEY)
-    root_logger.info(f"Starting transcription of {file_path} with model {model.value} and language {language}")
+    """Transcribe the audio file using the specified provider."""
+    clients = TranscriptionClients()
+    client = clients.get(provider, api_key)
+    root_logger.info(
+        f"Starting transcription of {file_path} with {provider.value}/{model.value} and language {language}"
+    )
     try:
         transcription = await client.create_transcription(file_path=file_path, model=model, language=language)
     except Exception as e:
@@ -119,16 +143,45 @@ async def main() -> None:
         # Validate input file
         audio_file = validate_audio_file(args.file)
 
-        # Parse model
+        # Parse provider
         try:
-            model = OpenAITranscriptionModel(args.model)
+            provider = InferenceProvider(args.provider)
         except ValueError:
-            print(f"Error: Invalid model '{args.model}'", file=sys.stderr)
+            print(f"Error: Invalid provider '{args.provider}'", file=sys.stderr)
+            sys.exit(1)
+
+        # Get API key for provider
+        if provider == InferenceProvider.OPENAI:
+            api_key = settings.OPENAI_API_KEY
+            default_model = OpenAITranscriptionModel.whisper_1.value
+        elif provider == InferenceProvider.GROQ:
+            api_key = settings.GROQ_API_KEY
+            default_model = GroqTranscriptionModel.whisper_large_v3_turbo.value
+        else:
+            print(f"Error: Unsupported provider '{provider}'", file=sys.stderr)
+            sys.exit(1)
+
+        if not api_key:
+            print(f"Error: API key not found for provider '{provider.value}'", file=sys.stderr)
+            print(f"Please set {provider.value.upper()}_API_KEY in your environment or .env file", file=sys.stderr)
+            sys.exit(1)
+
+        # Parse model
+        model_str = args.model if args.model else default_model
+        try:
+            model = transcription_model_from_provider(provider, model_str)
+        except ValueError:
+            print(f"Error: Invalid model '{model_str}' for provider '{provider.value}'", file=sys.stderr)
             sys.exit(1)
 
         # Perform transcription
         transcription_text = await transcribe_audio(
-            file_path=audio_file, language=args.language, model=model, output_path=args.output
+            file_path=audio_file,
+            language=args.language,
+            provider=provider,
+            model=model,
+            api_key=api_key,
+            output_path=args.output,
         )
 
         # Output result
