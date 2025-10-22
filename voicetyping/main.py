@@ -28,7 +28,6 @@ from .openai_client import (
     transcription_model_from_provider,
     BaseAIClient,
 )
-from .gnome_settings import GNOMESettingsReader
 from .const import InferenceProvider
 from .keyboard.dbus_client import VirtualKeyboardDBusClient
 from .transcription_client import TranscriptionClients
@@ -87,7 +86,6 @@ class VoiceTypingInterface(ServiceInterface):
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder = AudioRecorder()
         self._recording: Optional[AudioRecording] = None
-        self.settings = GNOMESettingsReader("org.gnome.shell.extensions.voicetyping")
         self.transcription_srv = TranscriptionService()
         self.clients = TranscriptionClients()
         self.keyboard_client = VirtualKeyboardDBusClient()
