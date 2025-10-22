@@ -1,5 +1,6 @@
 [Unit]
 Description=Voice Typing DBus Service for Keyboard Input
+Requires=dbus.service
 
 [Service]
 Type=simple

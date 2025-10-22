@@ -64,10 +64,10 @@ sudo cp etc/voicetyping-keyboard.service /etc/systemd/system/voicetyping-keyboar
 sudo systemctl enable voicetyping-keyboard@voicetyping.service
 sudo systemctl start voicetyping-keyboard@voicetyping.service
 # run as daily driver user (logging in to gnome session):
-systemctl edit --user --force --full voicetyping-core.service
-# !! paste contents of etc/voicetyping-core.service and adjust python paths
-systemctl enable --user voicetyping-core.service
-systemctl start --user voicetyping-core.service
+systemctl edit --force --full voicetyping-core.service
+# !! paste contents of etc/voicetyping-core.service and adjust python paths and user name
+systemctl enable voicetyping-core.service
+systemctl start voicetyping-core.service
 ```
 
 **Security warning** it's important to keep access to /dev/uinput very selective both for write and read since that's how malware could get access to whatever user is typing
@@ -77,6 +77,6 @@ systemctl start --user voicetyping-core.service
 ### Default logs
 
 ```
-journalctl --user -u voicetyping-core.service --follow
-journalctl -u voicetyping-keyboard@voicetyping.service
+journalctl -u voicetyping-core.service --follow
+journalctl -u voicetyping-keyboard@voicetyping.service --follow
 ```
