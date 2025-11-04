@@ -38,6 +38,14 @@ Backend uses python-uinput for simulating keyboard from text transcript. On many
 
 On the other hand it's bit problematic to give random application access to root therefore I prefer to use group `input` and give it write permissions to `/dev/uinput` device. Therefore, my advice is to use following setup:
 
+1. Load the uinput kernel module (if not already loaded):
+
+   $ sudo modprobe uinput
+
+   and make this permanent across reboots:
+
+   $ echo "uinput" | sudo tee /etc/modules-load.d/uinput.conf
+
 1. Create user who will run python backend: `sudo useradd -G input,audio -M -r voicetyping`
 1. Allow input group write to `/dev/uinput` by creating `/etc/udev/rules.d/99-uinput.rules` with following contents:
 
@@ -52,8 +60,8 @@ KERNEL=="uinput", GROUP="input", MODE="0660"
    crw-rw---- 1 root input 10, 223 Jul 27 14:47 /dev/uinput
 
 There is some DBus policy tweaking necessary to allow gnome shell extension to talk to python backend. There are two systemd services that need to be started:
-  1. voicetyping-keyboard.service is system service that runs as user `voicetyping` and has access to `/dev/uinput` device.
-  2. voicetyping-core.service is user service that runs as user who is logged in gnome session and has access to gnome shell DBus. More importantly it will have access to audio devices and even bluetooth ones (if default audio source is selected in the extension settings).
+  1. voicetyping-keyboard.service runs as user `voicetyping` and has access to `/dev/uinput` device.
+  2. voicetyping-core.service runs as user who is logged in gnome session and has access to gnome shell DBus. More importantly it will have access to audio devices and even bluetooth ones (if "default" audio source is selected in the extension settings).
 
 ```bash
 sudo cp etc/voicetyping-dbus-policy.conf /etc/dbus-1/system.d/voicetyping.conf
