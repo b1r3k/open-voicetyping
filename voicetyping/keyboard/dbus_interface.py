@@ -1,6 +1,6 @@
-import asyncio
+import enum
 import hashlib
-from typing import Optional
+import queue
 
 from dbus_next.service import ServiceInterface, method
 from pydantic import BaseModel
@@ -11,57 +11,54 @@ from .virtual_keyboard import VirtualKeyboard
 logger = root_logger.getChild(__name__)
 
 
-class TypingJob(BaseModel):
+class TypingEventType(enum.Enum):
+    TYPING = "text"
+    EXIT = "exit"
+
+
+class TypingEvent(BaseModel):
     text: str
     md5_hash: str
+    type: TypingEventType = TypingEventType.TYPING
 
 
 class VirtualKeyboardService:
-    def __init__(self):
-        self.queue = asyncio.Queue()
+    def __init__(self, q: queue.Queue[TypingEvent]) -> None:
         self.virtual_keyboard = VirtualKeyboard(emit_delay=0.005)
-        self.processing_task: Optional[asyncio.Task] = None
+        self.queue = q
 
-    async def start(self):
-        self.processing_task = asyncio.create_task(self.process_queue())
-
-    def add_to_queue(self, typing_job: TypingJob):
-        self.queue.put_nowait(typing_job)
-
-    async def process_queue(self):
+    def process_queue(self):
         try:
             while True:
-                job = await self.queue.get()
-                await asyncio.to_thread(self.virtual_keyboard.type_text, job.text)
-                logger.debug("Typed text with fingerprint: %s", job.md5_hash)
-        except asyncio.CancelledError:
-            logger.debug("VoiceTypist processing queue cancelled")
+                event = self.queue.get()
+                if event.type == TypingEventType.TYPING:
+                    self.virtual_keyboard.type_text(event.text)
+                    self.queue.task_done()
+                else:
+                    logger.info("exit command received, stopping keyboard service")
+                    self.queue.task_done()
+                    return
+                logger.debug("Typed text with fingerprint: %s", event.md5_hash)
         except Exception as e:
             logger.error(f"Error in VoiceTypist processing queue: {e}")
-
-    def close(self):
-        self.virtual_keyboard.close()
-        if self.processing_task:
-            self.processing_task.cancel()
-            self.processing_task = None
 
 
 class VirtualKeyboardInterface(ServiceInterface):
     """DBus interface for typing through uinput device"""
 
-    def __init__(self):
+    def __init__(self, q: queue.Queue[TypingEvent]):
         super().__init__("com.cxlab.VirtualKeyboardInterface")
-        self.typing_service = VirtualKeyboardService()
-
-    def close(self):
-        self.typing_service.close()
+        self.queue = q
 
     @method()
     async def emit(self, text: "s") -> None:  # noqa: F821 F722
         """Start voice recording."""
         text_hash = hashlib.md5(text.encode())
-        job = TypingJob(text=text, md5_hash=text_hash.hexdigest())
+        job = TypingEvent(text=text, md5_hash=text_hash.hexdigest())
         logger.debug("Received text to type, fingerprint: %s", job.md5_hash)
-        if not self.typing_service.processing_task:
-            await self.typing_service.start()
-        self.typing_service.add_to_queue(job)
+        self.queue.put_nowait(job)
+
+    def close(self) -> None:
+        """Cleanup resources."""
+        if not self.queue.empty():
+            self.queue.join()
