@@ -80,19 +80,23 @@ class TranscriptionService:
 class VoiceTypingInterface(ServiceInterface):
     """DBus interface for voice typing operations."""
 
+    @property
+    def audio_recorder(self):
+        if not self._audio_recorder:
+            self._audio_recorder = AudioRecorder()
+        return self._audio_recorder
+
     def __init__(self):
         super().__init__("com.cxlab.VoiceTypingInterface")
         self._is_recording = False
         self._recording_task: Optional[asyncio.Task] = None
-        self._audio_recorder = AudioRecorder()
+        self._audio_recorder: Optional[AudioRecorder] = None
         self._recording: Optional[AudioRecording] = None
         self.transcription_srv = TranscriptionService()
         self.clients = TranscriptionClients()
         self.keyboard_client = VirtualKeyboardDBusClient()
         self._processing_task = asyncio.create_task(self._processing_pipeline())
         root_logger.info("VoiceTypingInterface initialized")
-        list_devices = self._audio_recorder.list_devices()
-        root_logger.info(f"Available audio devices: {list_devices}")
 
     async def close(self):
         await self.keyboard_client.disconnect()
@@ -134,7 +138,7 @@ class VoiceTypingInterface(ServiceInterface):
         self.store_transcripts = store_transcripts
         try:
             # Start the audio recorder with the selected device
-            self._recording = self._audio_recorder.create_recording(device_name)
+            self._recording = self.audio_recorder.create_recording(device_name)
             root_logger.info("Started voice recording")
             self.RecordingStateChanged(True)
             return "recording_started"
@@ -197,7 +201,8 @@ class VoiceTypingInterface(ServiceInterface):
     @method()
     def GetAvailableAudioSources(self) -> "as":  # noqa: F821 F722
         """Get list of available audio sources for recording."""
-        devices = self._audio_recorder.list_devices()
+        devices = self.audio_recorder.list_devices()
+        root_logger.info("Fetching audio sources: %s", devices)
         # Return device names in order, the index will be the position in the list
         return [device["name"] for device in devices]
 
