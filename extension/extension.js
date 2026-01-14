@@ -83,11 +83,35 @@ export default class VoiceTypingExtension extends Extension {
         this._settings.connect('changed::inference-model', (settings, key) => {
             console.debug(`${key} = ${settings.get_string(key)}`);
         });
+
+        // Connect to RecordingStateChanged signal from backend
+        this._recordingStateSignalId = this._dbusProxy.connectSignal(
+            'RecordingStateChanged',
+            (parameters) => this._onRecordingStateChanged(parameters)
+        );
+
+        // Synchronize initial recording state from backend
+        try {
+            const result = this._dbusProxy.call('GetRecordingState');
+            const isRecording = result.get_child_value(0).get_boolean();
+            this._isRecording = isRecording;
+            this._indicator.setRecordingState(isRecording);
+            console.debug(`Initial recording state: ${isRecording}`);
+        } catch (error) {
+            console.error('Failed to get initial recording state:', error);
+            this._isRecording = false;
+        }
     }
 
     disable() {
         // Unregister keyboard shortcuts
         this._unregisterKeyboardShortcuts();
+
+        // Disconnect RecordingStateChanged signal
+        if (this._recordingStateSignalId) {
+            this._dbusProxy.disconnectSignal(this._recordingStateSignalId);
+            this._recordingStateSignalId = null;
+        }
 
         this._indicator.destroy();
         this._indicator = null;
@@ -156,14 +180,11 @@ export default class VoiceTypingExtension extends Extension {
             transcript_path = this._settings.get_string(SchemaKeys.TRANSCRIPT_PATH) || default_transcript_path;
         }
 
-        this._isRecording = true;
-        this._indicator.setRecordingState(true);
+        // Only send the DBus command - state will be updated via RecordingStateChanged signal
         this._dbusProxy.call('StartRecording', device_name, transcript_path, store_transcripts);
     }
 
     _stopRecording() {
-        this._isRecording = false;
-        this._indicator.setRecordingState(false);
         let language = this._settings.get_string(SchemaKeys.TRANSCRIPTION_LANGUAGE);
         let provider = this._settings.get_string(SchemaKeys.INFERENCE_PROVIDER);
         let model = this._settings.get_string(SchemaKeys.INFERENCE_MODEL);
@@ -178,6 +199,14 @@ export default class VoiceTypingExtension extends Extension {
             default:
                 throw new Error(`Unsupported inference provider: ${provider}`);
         }
+        // Only send the DBus command - state will be updated via RecordingStateChanged signal
         this._dbusProxy.call('StopRecording', language, provider, model, api_key);
+    }
+
+    _onRecordingStateChanged(parameters) {
+        const isRecording = parameters.get_child_value(0).get_boolean();
+        console.debug(`Recording state changed: ${isRecording}`);
+        this._isRecording = isRecording;
+        this._indicator.setRecordingState(isRecording);
     }
 }

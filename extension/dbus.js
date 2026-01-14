@@ -43,4 +43,16 @@ export class DBusProxy {
 
         return this.proxy.call_sync(methodName, args_variant, Gio.DBusCallFlags.NONE, -1, null);
     }
+
+    connectSignal(signalName, callback) {
+        return this.proxy.connect('g-signal', (proxy, senderName, signalNameReceived, parameters) => {
+            if (signalNameReceived === signalName) {
+                callback(parameters);
+            }
+        });
+    }
+
+    disconnectSignal(handlerId) {
+        this.proxy.disconnect(handlerId);
+    }
 }

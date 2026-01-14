@@ -181,7 +181,7 @@ class VoiceTypingInterface(ServiceInterface):
     @method()
     def GetRecordingState(self) -> "b":  # noqa: F821
         """Get current recording state."""
-        return self._recording.is_recording()
+        return self._recording is not None and self._recording.is_recording()
 
     @method()
     def GetAvailableInferenceProviders(self) -> "as":  # noqa: F821 F722
@@ -207,7 +207,7 @@ class VoiceTypingInterface(ServiceInterface):
         return [device["name"] for device in devices]
 
     @dbus_signal()
-    def RecordingStateChanged(self, is_recording: bool) -> None:
+    def RecordingStateChanged(self, is_recording: "b") -> None:  # noqa: F821
         """Signal emitted when recording state changes."""
         pass
 
