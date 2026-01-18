@@ -52,6 +52,28 @@ export class DBusProxy {
         });
     }
 
+    connectSignalWithRetry(signalName, callback, maxRetries = 3) {
+        let attempts = 0;
+        const connect = () => {
+            try {
+                return this.connectSignal(signalName, callback);
+            } catch (error) {
+                attempts++;
+                if (attempts < maxRetries) {
+                    console.warn(`Signal connection failed, retry ${attempts}/${maxRetries}`);
+                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+                        connect();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                } else {
+                    console.error(`Failed to connect signal after ${maxRetries} attempts`);
+                }
+                return null;
+            }
+        };
+        return connect();
+    }
+
     disconnectSignal(handlerId) {
         this.proxy.disconnect(handlerId);
     }
