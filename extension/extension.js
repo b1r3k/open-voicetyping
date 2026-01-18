@@ -87,6 +87,9 @@ export default class VoiceTypingExtension extends Extension {
         // Connect to RecordingStateChanged signal from backend
         this._connectRecordingStateSignal();
 
+        // Connect to ErrorOccurred signal from backend
+        this._connectErrorSignal();
+
         // Synchronize initial recording state from backend
         this._syncInitialState();
     }
@@ -101,6 +104,32 @@ export default class VoiceTypingExtension extends Extension {
         } catch (error) {
             console.error('Failed to connect RecordingStateChanged signal:', error);
             return false;
+        }
+    }
+
+    _connectErrorSignal() {
+        try {
+            this._errorSignalId = this._dbusProxy.connectSignal(
+                'ErrorOccurred',
+                (parameters) => this._onErrorOccurred(parameters)
+            );
+            return true;
+        } catch (error) {
+            console.error('Failed to connect ErrorOccurred signal:', error);
+            return false;
+        }
+    }
+
+    _onErrorOccurred(parameters) {
+        try {
+            const category = parameters.get_child_value(0).get_string()[0];
+            const code = parameters.get_child_value(1).get_string()[0];
+            const message = parameters.get_child_value(2).get_string()[0];
+
+            console.error(`Voice Typing Error [${category}/${code}]: ${message}`);
+            Main.notify('Voice Typing Error', message);
+        } catch (error) {
+            console.error('Failed to handle ErrorOccurred:', error);
         }
     }
 
@@ -124,6 +153,12 @@ export default class VoiceTypingExtension extends Extension {
         if (this._recordingStateSignalId) {
             this._dbusProxy.disconnectSignal(this._recordingStateSignalId);
             this._recordingStateSignalId = null;
+        }
+
+        // Disconnect ErrorOccurred signal
+        if (this._errorSignalId) {
+            this._dbusProxy.disconnectSignal(this._errorSignalId);
+            this._errorSignalId = null;
         }
 
         this._indicator.destroy();

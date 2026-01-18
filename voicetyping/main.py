@@ -104,7 +104,19 @@ class VoiceTypingInterface(ServiceInterface):
         self.clients = TranscriptionClients()
         self.keyboard_client = VirtualKeyboardDBusClient()
         self._processing_task = asyncio.create_task(self._processing_pipeline())
+        # Error signal state
+        self._last_error_category = ""
+        self._last_error_code = ""
+        self._last_error_message = ""
         root_logger.info("VoiceTypingInterface initialized")
+
+    def _emit_error(self, category: str, code: str, message: str) -> None:
+        """Helper to emit error signal."""
+        self._last_error_category = category
+        self._last_error_code = code
+        self._last_error_message = message
+        root_logger.error(f"Error [{category}/{code}]: {message}")
+        self.ErrorOccurred()
 
     def _on_state_change(self, old_state: ProcessingState, new_state: ProcessingState) -> None:
         """Handle state machine transitions by emitting DBus signal."""
@@ -118,6 +130,7 @@ class VoiceTypingInterface(ServiceInterface):
         # Connect to the keyboard service
         if not await self.keyboard_client.connect():
             root_logger.error("Failed to connect to VirtualKeyboard service")
+            self._emit_error("keyboard", "connection_failed", "Keyboard service unavailable")
             return
 
         async for transcription_task in self.transcription_srv.process_queue():
@@ -130,6 +143,7 @@ class VoiceTypingInterface(ServiceInterface):
                 await self.keyboard_client.emit(transcription_task.transcription)
             else:
                 root_logger.error(f"Failed to transcribe {transcription_task.audio_path}")
+                self._emit_error("transcription", "api_error", "Failed to transcribe audio")
             if not transcription_task.store_transcripts and transcription_task.audio_path.exists():
                 try:
                     root_logger.debug(f"Cleaning up audio file {transcription_task.audio_path}")
@@ -195,6 +209,7 @@ class VoiceTypingInterface(ServiceInterface):
             return "recording_stopped"
         except Exception as e:
             root_logger.error(f"Failed to stop recording: {e}")
+            self._emit_error("internal", "state_error", f"Failed to stop recording: {e}")
             return "stop_failed"
         finally:
             self._recording.cleanup()
@@ -232,6 +247,11 @@ class VoiceTypingInterface(ServiceInterface):
     def RecordingStateChanged(self) -> "b":  # noqa: F821 F722
         """Signal emitted when recording state changes."""
         return self._state.is_recording
+
+    @dbus_signal()
+    def ErrorOccurred(self) -> "sss":  # noqa: F821 F722
+        """Signal emitted when an error occurs. Returns (category, code, message)."""
+        return [self._last_error_category, self._last_error_code, self._last_error_message]
 
 
 class VoiceTypingService:
