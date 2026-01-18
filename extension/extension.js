@@ -85,21 +85,34 @@ export default class VoiceTypingExtension extends Extension {
         });
 
         // Connect to RecordingStateChanged signal from backend
-        this._recordingStateSignalId = this._dbusProxy.connectSignal(
-            'RecordingStateChanged',
-            (parameters) => this._onRecordingStateChanged(parameters)
-        );
+        this._connectRecordingStateSignal();
 
         // Synchronize initial recording state from backend
+        this._syncInitialState();
+    }
+
+    _connectRecordingStateSignal() {
+        try {
+            this._recordingStateSignalId = this._dbusProxy.connectSignal(
+                'RecordingStateChanged',
+                (parameters) => this._onRecordingStateChanged(parameters)
+            );
+            return true;
+        } catch (error) {
+            console.error('Failed to connect RecordingStateChanged signal:', error);
+            return false;
+        }
+    }
+
+    _syncInitialState() {
         try {
             const result = this._dbusProxy.call('GetRecordingState');
             const isRecording = result.get_child_value(0).get_boolean();
-            this._isRecording = isRecording;
             this._indicator.setRecordingState(isRecording);
             console.debug(`Initial recording state: ${isRecording}`);
         } catch (error) {
             console.error('Failed to get initial recording state:', error);
-            this._isRecording = false;
+            this._indicator.setRecordingState(false);
         }
     }
 
@@ -163,9 +176,17 @@ export default class VoiceTypingExtension extends Extension {
     }
 
     _onShortcutPressed() {
-        if (this._isRecording) {
-            this._stopRecording();
-        } else {
+        try {
+            const result = this._dbusProxy.call('GetRecordingState');
+            const isRecording = result.get_child_value(0).get_boolean();
+            if (isRecording) {
+                this._stopRecording();
+            } else {
+                this._startRecording();
+            }
+        } catch (error) {
+            console.error('Failed to get recording state:', error);
+            // Fallback: try to start recording
             this._startRecording();
         }
     }
@@ -204,9 +225,12 @@ export default class VoiceTypingExtension extends Extension {
     }
 
     _onRecordingStateChanged(parameters) {
-        const isRecording = parameters.get_child_value(0).get_boolean();
-        console.debug(`Recording state changed: ${isRecording}`);
-        this._isRecording = isRecording;
-        this._indicator.setRecordingState(isRecording);
+        try {
+            const isRecording = parameters.get_child_value(0).get_boolean();
+            console.debug(`Recording state changed: ${isRecording}`);
+            this._indicator.setRecordingState(isRecording);
+        } catch (error) {
+            console.error('Failed to handle RecordingStateChanged:', error);
+        }
     }
 }

@@ -10,7 +10,7 @@ import asyncio
 import hashlib
 import signal
 import sys
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, Callable
 from functools import partial
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +31,7 @@ from .openai_client import (
 from .const import InferenceProvider
 from .keyboard.dbus_client import VirtualKeyboardDBusClient
 from .transcription_client import TranscriptionClients
+from .state import ProcessingEvent, ProcessingState, ProcessingStateMachine
 
 
 class TranscriptionTask:
@@ -42,6 +43,8 @@ class TranscriptionTask:
         model: TranscriptionModel,
         client: BaseAIClient,
         store_transcripts: bool,
+        on_start_callback: Callable,
+        on_finish_callback: Callable,
     ):
         self.audio_path = audio_path
         self.provider = provider
@@ -49,6 +52,8 @@ class TranscriptionTask:
         self.language = language
         self.client = client
         self.store_transcripts = store_transcripts
+        self.on_start_callback = on_start_callback
+        self.on_finish_callback = on_finish_callback
 
 
 class TranscriptionService:
@@ -62,6 +67,7 @@ class TranscriptionService:
         try:
             while True:
                 transcription_task = await self.queue.get()
+                transcription_task.on_start_callback()
                 root_logger.info(
                     f"Processing audio data with model {transcription_task.provider}/{transcription_task.model} and language {transcription_task.language}"
                 )
@@ -70,6 +76,7 @@ class TranscriptionService:
                 )
                 text = text.decode("utf-8").strip()
                 transcription_task.transcription = text
+                transcription_task.on_finish_callback()
                 yield transcription_task
         except asyncio.CancelledError:
             root_logger.info("TranscriptionService processing queue cancelled")
@@ -88,7 +95,8 @@ class VoiceTypingInterface(ServiceInterface):
 
     def __init__(self):
         super().__init__("com.cxlab.VoiceTypingInterface")
-        self._is_recording = False
+        self._state = ProcessingStateMachine()
+        self._state.add_listener(self._on_state_change)
         self._recording_task: Optional[asyncio.Task] = None
         self._audio_recorder: Optional[AudioRecorder] = None
         self._recording: Optional[AudioRecording] = None
@@ -97,6 +105,10 @@ class VoiceTypingInterface(ServiceInterface):
         self.keyboard_client = VirtualKeyboardDBusClient()
         self._processing_task = asyncio.create_task(self._processing_pipeline())
         root_logger.info("VoiceTypingInterface initialized")
+
+    def _on_state_change(self, old_state: ProcessingState, new_state: ProcessingState) -> None:
+        """Handle state machine transitions by emitting DBus signal."""
+        self.RecordingStateChanged()
 
     async def close(self):
         await self.keyboard_client.disconnect()
@@ -130,7 +142,7 @@ class VoiceTypingInterface(ServiceInterface):
     async def StartRecording(self, device_name: "s", transcript_path: "s", store_transcripts: "b") -> "s":  # noqa: F821
         """Start voice recording."""
 
-        if self._recording and self._recording.is_recording():
+        if self._state.is_recording:
             root_logger.warning("Recording already in progress")
             return "already_recording"
 
@@ -139,8 +151,8 @@ class VoiceTypingInterface(ServiceInterface):
         try:
             # Start the audio recorder with the selected device
             self._recording = self.audio_recorder.create_recording(device_name)
+            self._state.transition(ProcessingEvent.START_RECORDING)
             root_logger.info("Started voice recording")
-            self.RecordingStateChanged(True)
             return "recording_started"
         except Exception as e:
             root_logger.error(f"Failed to start recording: {e}")
@@ -149,14 +161,17 @@ class VoiceTypingInterface(ServiceInterface):
     @method()
     async def StopRecording(self, language: "s", provider: "s", model: "s", api_key: "s") -> "s":  # noqa: F821
         """Stop voice recording."""
-        if self._recording is None or not self._recording.is_recording():
+        if not self._state.is_recording:
             root_logger.warning("No recording in progress")
             return "not_recording"
 
         try:
             self._recording.stop()
+            self._state.transition(ProcessingEvent.STOP_RECORDING)
+            root_logger.info("Stopped voice recording")
             # generate filename in format YYYY-MM-DD_HH-MM-SS
             now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            self._state.transition(ProcessingEvent.TRANSFORM_START)
             md5_hash = self._recording.fingerprint()
             filename = Path(self.transcript_path) / now_str / md5_hash
             root_logger.info("Saving audio to %s", filename.resolve())
@@ -164,12 +179,19 @@ class VoiceTypingInterface(ServiceInterface):
             provider = InferenceProvider(provider)
             model = transcription_model_from_provider(provider, model)
             client = self.clients.get(provider, api_key)
+            self._state.transition(ProcessingEvent.TRANSFORM_STOP)
             self.transcription_srv.add_to_queue(
-                TranscriptionTask(audio_path, language, provider, model, client, self.store_transcripts)
+                TranscriptionTask(
+                    audio_path,
+                    language,
+                    provider,
+                    model,
+                    client,
+                    self.store_transcripts,
+                    lambda: self._state.transition(ProcessingEvent.TRANSCRIBE_START),
+                    lambda: self._state.transition(ProcessingEvent.TRANSCRIBE_STOP),
+                )
             )
-
-            root_logger.info("Stopped voice recording")
-            self.RecordingStateChanged(False)
             return "recording_stopped"
         except Exception as e:
             root_logger.error(f"Failed to stop recording: {e}")
@@ -181,7 +203,7 @@ class VoiceTypingInterface(ServiceInterface):
     @method()
     def GetRecordingState(self) -> "b":  # noqa: F821
         """Get current recording state."""
-        return self._recording is not None and self._recording.is_recording()
+        return self._state.is_recording
 
     @method()
     def GetAvailableInferenceProviders(self) -> "as":  # noqa: F821 F722
@@ -207,9 +229,9 @@ class VoiceTypingInterface(ServiceInterface):
         return [device["name"] for device in devices]
 
     @dbus_signal()
-    def RecordingStateChanged(self, is_recording: "b") -> None:  # noqa: F821
+    def RecordingStateChanged(self) -> "b":  # noqa: F821 F722
         """Signal emitted when recording state changes."""
-        pass
+        return self._state.is_recording
 
 
 class VoiceTypingService:
@@ -248,7 +270,7 @@ class VoiceTypingService:
     async def stop(self) -> None:
         """Stop the DBus service."""
         try:
-            if self.interface and self.interface._is_recording:
+            if self.interface and self.interface._state.is_recording:
                 self.interface.StopRecording()
 
             if self.bus:

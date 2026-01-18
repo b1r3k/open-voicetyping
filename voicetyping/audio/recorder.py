@@ -37,7 +37,7 @@ class AbstractAudioRecording:
         if not self._stream.is_stopped():
             self._stream.stop_stream()
 
-    def is_recording(self):
+    def is_recording(self) -> bool:
         return not self._stream.is_stopped()
 
     def fingerprint(self) -> str:
