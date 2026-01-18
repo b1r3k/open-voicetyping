@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "voicetyping"
-version = "0.5.1"
+version = "0.5.2"
 description = ""
 authors = ["Lukasz Jachym <lukasz.jachym@gmail.com>"]
 readme = "README.md"
