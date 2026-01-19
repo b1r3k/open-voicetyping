@@ -123,10 +123,9 @@ export default class VoiceTypingExtension extends Extension {
     _onErrorOccurred(parameters) {
         try {
             const category = parameters.get_child_value(0).get_string()[0];
-            const code = parameters.get_child_value(1).get_string()[0];
-            const message = parameters.get_child_value(2).get_string()[0];
+            const message = parameters.get_child_value(1).get_string()[0];
 
-            console.error(`Voice Typing Error [${category}/${code}]: ${message}`);
+            console.error(`[${category}]: ${message}`);
             Main.notify('Voice Typing Error', message);
         } catch (error) {
             console.error('Failed to handle ErrorOccurred:', error);

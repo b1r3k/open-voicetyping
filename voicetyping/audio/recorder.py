@@ -9,6 +9,7 @@ import lameenc
 import numpy as np
 
 from ..logging import root_logger
+from ..errors import DeviceAccessError, AudioSaveError
 from .sampler import Resampler
 
 logger = root_logger.getChild(__name__)
@@ -24,11 +25,12 @@ class AbstractAudioRecording:
         raise NotImplementedError
 
     @abstractmethod
-    def save(self, path: pathlib.Path):
+    def save(self, path: pathlib.Path) -> pathlib.Path | None:
         raise NotImplementedError
 
     def save_data(self, data: bytes | bytearray, path: pathlib.Path):
-        assert self._stream.is_stopped()
+        if not self._stream.is_stopped():
+            raise AudioSaveError("Cannot save audio data while stream is still active")
         os.makedirs(path.parent, exist_ok=True)
         with open(path, "wb") as f:
             f.write(data)
@@ -74,7 +76,7 @@ class Mp3AudioRecording(AbstractAudioRecording):
         self._data.extend(self.encoder.encode(in_data))
         return None, pyaudio.paContinue
 
-    def save(self, path: pathlib.Path):
+    def save(self, path: pathlib.Path) -> pathlib.Path | None:
         if path.suffix != ".mp3":
             path = path.with_suffix(".mp3")
         self._data.extend(self.encoder.flush())
@@ -82,8 +84,7 @@ class Mp3AudioRecording(AbstractAudioRecording):
             self.save_data(self._data, path)
             return path
         except Exception as e:
-            logger.error(f"Failed to save audio to {path}: {e}")
-            return None
+            raise AudioSaveError(f"Failed to save audio to {path}: {e}") from e
 
 
 class AudioRecorder:
@@ -126,7 +127,7 @@ class AudioRecorder:
                 return device
         return None
 
-    def create_recording(self, device_name: str) -> AudioRecording:
+    def create_recording(self, device_name: str) -> AudioRecording | None:
         recording = None
         assert device_name is not None, "Device name is required"
         recording_device = self.get_recording_device_by_name(device_name)
@@ -164,5 +165,4 @@ class AudioRecorder:
             return recording
 
         except Exception as e:
-            logger.error(f"Failed to start recording: {e}")
-            return False
+            raise DeviceAccessError(f"Failed to create recording: {e}") from e

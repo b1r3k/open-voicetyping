@@ -7,15 +7,12 @@ from abc import ABC, abstractmethod
 
 from httpx import URL
 
-from .http_client import AsyncHttpClient
+from .http_client import AsyncHttpClient, HTTPClientError, RetryException
 from .logging import root_logger
 from .const import InferenceProvider
+from .errors import APIError
 
 logger = root_logger.getChild(__name__)
-
-print("logger.getEffectiveLevel()", logger.getEffectiveLevel())
-print("logger.level", logger.level)
-print("logger.handlers", logger.handlers)
 
 mimetypes.init()
 
@@ -199,25 +196,24 @@ class OpenAIClient(BaseAIClient):
         except Exception as e:
             logger.error(f"Error guessing MIME type for {file_path}: {e}")
             raise e
-        try:
-            file_obj = open(file_path.absolute(), "rb")
-        except Exception as e:
-            logger.error(f"Error opening {file_path}: {e}")
-            raise e
 
-        files = {
-            "file": (file_path.name, file_obj, mime_type),
-        }
+        with open(file_path.absolute(), "rb") as file_obj:
+            files = {
+                "file": (file_path.name, file_obj, mime_type),
+            }
 
-        fields = {
-            "model": model.value,
-            "language": language,
-            "response_format": "text",
-            "temperature": "0.0",
-        }
-        response = await self.post(url, headers=headers, data=fields, files=files)
-        content = await response.aread()
-        return content
+            fields = {
+                "model": model.value,
+                "language": language,
+                "response_format": "text",
+                "temperature": "0.0",
+            }
+            try:
+                response = await self.post(url, headers=headers, data=fields, files=files)
+                content = await response.aread()
+                return content
+            except (HTTPClientError, RetryException) as e:
+                raise APIError(f"Transcription API failed: {e}") from e
 
     async def stream_transcription(
         self,
@@ -240,22 +236,23 @@ class OpenAIClient(BaseAIClient):
         headers["Accept"] = "text/event-stream"
 
         mime_type = mimetypes.guess_type(file_path)[0]
-        fields = {
-            "file": (file_path.name, open(file_path, "rb"), mime_type),
-            "model": model.value,
-            "language": language,
-            "response_format": "text",
-            "temperature": 0.0,
-            "stream": True,
-        }
-        async with self.session.stream("POST", url, headers=headers, files=fields) as response:
-            async for chunk in response.aiter_lines():
-                if chunk and chunk.startswith("data:"):
-                    data = chunk[5:].strip()
-                    if data == "":
-                        continue
-                    json_data = self.json_decode(data)
-                    yield json_data
+        with open(file_path, "rb") as file_obj:
+            fields = {
+                "file": (file_path.name, file_obj, mime_type),
+                "model": model.value,
+                "language": language,
+                "response_format": "text",
+                "temperature": 0.0,
+                "stream": True,
+            }
+            async with self.session.stream("POST", url, headers=headers, files=fields) as response:
+                async for chunk in response.aiter_lines():
+                    if chunk and chunk.startswith("data:"):
+                        data = chunk[5:].strip()
+                        if data == "":
+                            continue
+                        json_data = self.json_decode(data)
+                        yield json_data
 
 
 class GroqClient(OpenAIClient):

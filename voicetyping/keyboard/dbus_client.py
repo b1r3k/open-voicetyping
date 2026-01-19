@@ -6,6 +6,7 @@ from dbus_next.aio import MessageBus
 from dbus_next.service import ServiceInterface
 
 from ..logging import root_logger
+from ..errors import KeyboardConnectionError, KeyboardTypingError
 
 logger = root_logger.getChild(__name__)
 
@@ -30,14 +31,12 @@ class VirtualKeyboardDBusClient:
             logger.info(f"Connected to VirtualKeyboard service at {self._service_name}")
             return True
         except Exception as e:
-            logger.error(f"Failed to connect to VirtualKeyboard service: {e}")
-            return False
+            raise KeyboardConnectionError(f"Failed to connect to keyboard service: {e}") from e
 
     async def emit(self, text: str) -> bool:
         """Send text to be typed via the VirtualKeyboard service."""
         if not self.proxy:
-            logger.error("Not connected to VirtualKeyboard service")
-            return False
+            raise KeyboardTypingError("Not connected to VirtualKeyboard service")
 
         try:
             text_md5 = hashlib.md5(text.encode()).hexdigest()
@@ -45,8 +44,7 @@ class VirtualKeyboardDBusClient:
             logger.debug("Successfully sent text (fingerprint: %s) to VirtualKeyboard", text_md5)
             return True
         except Exception as e:
-            logger.error(f"Failed to emit text to VirtualKeyboard: {e}")
-            return False
+            raise KeyboardTypingError(f"Failed to emit text: {e}") from e
 
     async def disconnect(self):
         """Disconnect from the VirtualKeyboard service."""
