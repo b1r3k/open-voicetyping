@@ -2,6 +2,68 @@
 
 # Voicetyping
 
+## Architecture
+
+Voicetyping uses a two-service design for security through privilege separation:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GNOME Shell Extension                        │
+│                   (voicetyping@cx-lab.com)                      │
+│         Panel indicator, keyboard shortcut handling            │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ DBus (system bus)
+                            │ com.cxlab.VoiceTyping
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   voicetyping-core.service                      │
+│                    (runs as logged-in user)                     │
+│  • Audio recording (PyAudio + LAME)                            │
+│  • Transcription (OpenAI Whisper / Groq API)                   │
+│  • State machine management                                     │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ DBus (system bus)
+                            │ com.cxlab.VirtualKeyboard
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              voicetyping-keyboard@voicetyping.service           │
+│                (runs as 'voicetyping' user)                     │
+│  • Text → keyboard events via /dev/uinput                      │
+│  • Isolated for security (input group access)                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Services
+
+**voicetyping-core.service** (user service)
+- Runs as the logged-in GNOME user
+- Has access to audio devices (including Bluetooth)
+- Handles recording, transcription, and state management
+- DBus interface: `com.cxlab.VoiceTyping`
+
+**voicetyping-keyboard@voicetyping.service** (system service)
+- Runs as dedicated `voicetyping` user in `input` group
+- Has write access to `/dev/uinput` for keyboard simulation
+- Isolated from user session for security
+- DBus interface: `com.cxlab.VirtualKeyboard`
+
+### DBus Communication
+
+Key methods:
+- `StartRecording()` / `StopRecording()` - Control recording state
+- `EmitText(text)` - Send transcribed text to keyboard service
+
+Key signals:
+- `RecordingStateChanged(boolean)` - Notifies extension of state changes
+- `ErrorOccurred(category, message)` - Reports errors to extension
+
+### Security Model
+
+The two-service design provides privilege separation:
+- `/dev/uinput` access is restricted to a dedicated system user
+- The main service runs with user privileges (audio access)
+- No single process has both audio capture and keyboard injection capabilities
+
 ## Requirements
 
 ## How to install
@@ -36,7 +98,9 @@ Backend uses python-uinput for simulating keyboard from text transcript. On many
    $ ls -lau /dev/input
    crw------- 1 root root 10, 223 Jul 27 14:47 /dev/uinput
 
-On the other hand it's bit problematic to give random application access to root therefore I prefer to use group `input` and give it write permissions to `/dev/uinput` device. Therefore, my advice is to use following setup:
+On the other hand it's a bit problematic to give random application access to root therefore I prefer to use group
+`input` and give it write permissions to `/dev/uinput` device. Therefore, my advice is to use following setup
+(tailored for Debian):
 
 1. Load the uinput kernel module (if not already loaded):
 
@@ -78,7 +142,10 @@ systemctl enable voicetyping-core.service
 systemctl start voicetyping-core.service
 ```
 
-**Security warning** it's important to keep access to /dev/uinput very selective both for write and read since that's how malware could get access to whatever user is typing
+### Security considerations
+
+it's important to keep access to /dev/uinput very selective both for write and read permissions since that's how
+malware could get access to whatever user is typing
 
 ## Development
 
@@ -87,4 +154,12 @@ systemctl start voicetyping-core.service
 ```
 journalctl -u voicetyping-core.service --follow
 journalctl -u voicetyping-keyboard@voicetyping.service --follow
+```
+
+### Gnome extension management
+
+```bash
+gnome-extensions list
+gnome-extensions disable voicetyping@cx-lab.com
+gnome-extensions enable voicetyping@cx-lab.com
 ```
