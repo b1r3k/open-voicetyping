@@ -90,11 +90,13 @@ class VirtualKeyboard:
             device.emit_combo(combo + [key])
         else:
             device.emit_click(key)
+        device.syn()
 
     def type_text(self, text):
         try:
-            for char in text:
-                self.type_char(self.device, char)
+            for word in text.split():
+                for char in word:
+                    self.type_char(self.device, char)
                 if self.emit_delay > 0:
                     time.sleep(self.emit_delay)
         except Exception:
