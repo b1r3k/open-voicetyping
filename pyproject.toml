@@ -4,6 +4,7 @@ version = "1.0.1"
 description = ""
 authors = ["Lukasz Jachym <lukasz.jachym@gmail.com>"]
 readme = "README.md"
+license = "GPL-3.0-or-later"
 packages = [{include = "voicetyping"}]
 
 [tool.poetry.dependencies]

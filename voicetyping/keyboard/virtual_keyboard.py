@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Lukasz Jachym <lukasz.jachym@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import uinput
 import time
 from uinput import _CHAR_MAP

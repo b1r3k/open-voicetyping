@@ -8,5 +8,6 @@
   ],
   "url": "https://github.com/cx-lab/voicetyping",
   "version": 1,
-  "settings-schema": "org.gnome.shell.extensions.voicetyping"
+  "settings-schema": "org.gnome.shell.extensions.voicetyping",
+  "license": "GPL-3.0-or-later"
 }
