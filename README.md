@@ -2,6 +2,29 @@
 
 # Voicetyping
 
+open-voicetyping is a Linux-first, AI-driven dictation system that turns speech into real keyboard events.
+Built for GNOME and designed with privilege separation, it combines Whisper-based transcription with a hardened /dev/uinput backend.
+Ideal for developers and power users who want local control, extensibility, and strong security boundaries.
+
+## Table of Contents
+
+- [Architecture](#architecture)
+  - [Services](#services)
+  - [DBus Communication](#dbus-communication)
+  - [Security Model](#security-model)
+- [Requirements](#requirements)
+  - [System Packages Required](#system-packages-required)
+    - [Audio Libraries (for pyaudio)](#audio-libraries-for-pyaudio)
+    - [MP3 Encoding (for lameenc)](#mp3-encoding-for-lameenc)
+    - [uinput/evdev (for python-uinput)](#uinputevdev-for-python-uinput)
+- [How to install](#how-to-install)
+  - [Install python backend](#install-python-backend)
+  - [Install GNOME Shell extension](#install-gnome-shell-extension)
+  - [Security considerations](#security-considerations)
+- [Development](#development)
+  - [Default logs](#default-logs)
+  - [Gnome extension management](#gnome-extension-management)
+
 ## Architecture
 
 Voicetyping uses a two-service design for security through privilege separation:
@@ -66,14 +89,28 @@ The two-service design provides privilege separation:
 
 ## Requirements
 
+ - Python >=3.12
+ - GNOME Shell (for extension)
+
+### System Packages Required
+
+Given Debian as the target system
+
+#### Audio Libraries (for pyaudio)
+
+- libportaudio2 - PortAudio runtime library
+- portaudio19-dev - PortAudio development files
+
+#### MP3 Encoding (for lameenc)
+
+- libmp3lame0 - LAME MP3 encoder runtime library
+- libmp3lame-dev - LAME MP3 encoder development files
+
+#### uinput/evdev (for python-uinput)
+
+- libudev-dev - udev development files (needed for building)
+
 ## How to install
-
-### Install gnome extension
-
-   $ cd extension
-   $ make install
-
-You probably will need to restart your GNOME session i.e. logout/login
 
 ### Install python backend
 
@@ -141,6 +178,15 @@ systemctl edit --force --full voicetyping-core.service
 systemctl enable voicetyping-core.service
 systemctl start voicetyping-core.service
 ```
+
+### Install GNOME Shell extension
+
+```
+$ cd extension
+$ make install
+```
+
+You probably will need to restart your GNOME session i.e. logout/login
 
 ### Security considerations
 
