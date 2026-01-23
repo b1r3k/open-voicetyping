@@ -43,3 +43,43 @@ clean:
 	rm -rf __pycache__ .pytest_cache .mypy_cache .ruff_cache .coverage .coverage.*
 	find . -name "*.orig" -type f -delete
 	find . -name "*.pyc" -type f -delete
+
+# Debian packaging targets
+debian-deps:
+	sudo apt-get update
+	sudo apt-get install -y debhelper dh-python pybuild-plugin-pyproject \
+		python3-all python3-setuptools python3-poetry-core \
+		portaudio19-dev libmp3lame-dev libudev-dev
+
+debian-sync-version:
+	@echo "Syncing debian version to $(APP_VERSION)..."
+	sed -i '1s/(.*)/($(APP_VERSION)-1)/' debian/changelog
+
+debian-build: debian-sync-version
+	dpkg-buildpackage -us -uc -b
+
+debian-clean:
+	dh_clean
+
+debian-install: debian-build
+	sudo dpkg -i ../open-voicetyping_*.deb
+
+debian-lint:
+	lintian ../open-voicetyping_*.deb
+
+debian-test-install: debian-build
+	# Test installation in current environment
+	sudo dpkg -i ../open-voicetyping_*.deb
+	@echo ""
+	@echo "=== System service status ==="
+	systemctl status voicetyping-keyboard@voicetyping.service --no-pager || true
+	@echo ""
+	@echo "=== Installed files ==="
+	dpkg -L open-voicetyping | head -20
+	@echo "... (truncated)"
+
+debian-remove:
+	sudo apt-get remove open-voicetyping
+
+debian-purge:
+	sudo apt-get purge open-voicetyping

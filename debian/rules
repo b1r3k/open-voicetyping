@@ -1,0 +1,110 @@
+#!/usr/bin/make -f
+
+export PYBUILD_NAME=voicetyping
+
+%:
+	dh $@ --with python3
+
+override_dh_auto_clean:
+	rm -rf dist/ build/ *.egg-info
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+
+override_dh_auto_build:
+	# Build wheel using python3 -m build
+	python3 -m build --wheel
+
+override_dh_auto_install:
+	# Create directory structure
+	mkdir -p debian/open-voicetyping/opt/open-voicetyping/wheel
+	mkdir -p debian/open-voicetyping/usr/bin
+
+	# Ship the wheel (venv created at install time in postinst)
+	cp dist/voicetyping-*.whl debian/open-voicetyping/opt/open-voicetyping/wheel/
+
+	# Create wrapper scripts for /usr/bin
+	echo '#!/bin/bash' > debian/open-voicetyping/usr/bin/voicetyping-server
+	echo 'exec /opt/open-voicetyping/venv/bin/voicetyping-server "$$@"' >> debian/open-voicetyping/usr/bin/voicetyping-server
+	chmod +x debian/open-voicetyping/usr/bin/voicetyping-server
+
+	echo '#!/bin/bash' > debian/open-voicetyping/usr/bin/voicetyping-keyboard
+	echo 'exec /opt/open-voicetyping/venv/bin/voicetyping-keyboard "$$@"' >> debian/open-voicetyping/usr/bin/voicetyping-keyboard
+	chmod +x debian/open-voicetyping/usr/bin/voicetyping-keyboard
+
+	echo '#!/bin/bash' > debian/open-voicetyping/usr/bin/voicetyping-transcribe
+	echo 'exec /opt/open-voicetyping/venv/bin/voicetyping-transcribe "$$@"' >> debian/open-voicetyping/usr/bin/voicetyping-transcribe
+	chmod +x debian/open-voicetyping/usr/bin/voicetyping-transcribe
+
+	echo '#!/bin/bash' > debian/open-voicetyping/usr/bin/voicetyping-record
+	echo 'exec /opt/open-voicetyping/venv/bin/voicetyping-record "$$@"' >> debian/open-voicetyping/usr/bin/voicetyping-record
+	chmod +x debian/open-voicetyping/usr/bin/voicetyping-record
+
+	# Process and install systemd service files
+
+	# User service: voicetyping-core.service
+	mkdir -p debian/open-voicetyping/usr/lib/systemd/user
+	sed -e 's|^User=.*||' \
+	    -e 's|^Group=.*||' \
+	    -e 's|WorkingDirectory=.*|WorkingDirectory=/opt/open-voicetyping/venv|' \
+	    -e 's|ExecStart=.*/voicetyping-server|ExecStart=/opt/open-voicetyping/venv/bin/voicetyping-server|' \
+	    -e '/^Environment=PYTHONPATH=/d' \
+	    etc/voicetyping-core.service > debian/open-voicetyping/usr/lib/systemd/user/voicetyping-core.service
+
+	# System service: voicetyping-keyboard@.service (templated)
+	mkdir -p debian/open-voicetyping/lib/systemd/system
+	sed -e 's|WorkingDirectory=.*|WorkingDirectory=/opt/open-voicetyping/venv|' \
+	    -e 's|ExecStart=.*/voicetyping-keyboard|ExecStart=/opt/open-voicetyping/venv/bin/voicetyping-keyboard|' \
+	    -e '/^Environment=PYTHONPATH=/d' \
+	    etc/voicetyping-keyboard.service > debian/open-voicetyping/lib/systemd/system/voicetyping-keyboard@.service
+
+	# Install generic DBus policy
+	mkdir -p debian/open-voicetyping/usr/share/dbus-1/system.d
+	cp etc/voicetyping-dbus-policy-generic.conf \
+	   debian/open-voicetyping/usr/share/dbus-1/system.d/voicetyping.conf
+
+	# Create udev rules for /dev/uinput access
+	mkdir -p debian/open-voicetyping/usr/lib/udev/rules.d
+	echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' > debian/open-voicetyping/usr/lib/udev/rules.d/99-voicetyping-uinput.rules
+
+	# Create kernel module configuration to load uinput
+	mkdir -p debian/open-voicetyping/usr/lib/modules-load.d
+	echo 'uinput' > debian/open-voicetyping/usr/lib/modules-load.d/voicetyping-uinput.conf
+
+	# Install GNOME Shell extension
+	mkdir -p debian/open-voicetyping/usr/share/gnome-shell/extensions/voicetyping@cx-lab.com
+	cp -r extension/extension.js \
+	      extension/metadata.json \
+	      extension/stylesheet.css \
+	      extension/prefs.js \
+	      debian/open-voicetyping/usr/share/gnome-shell/extensions/voicetyping@cx-lab.com/
+
+	# Install GSettings schema
+	mkdir -p debian/open-voicetyping/usr/share/glib-2.0/schemas
+	cp extension/schemas/org.gnome.shell.extensions.voicetyping.gschema.xml \
+	   debian/open-voicetyping/usr/share/glib-2.0/schemas/
+
+override_dh_auto_test:
+	# Skip tests during package build
+	@echo "Skipping tests"
+
+override_dh_shlibdeps:
+	# Skip automatic dependency scanning - dependencies installed at install time
+	# All system library dependencies are manually declared in debian/control
+	@echo "Skipping dh_shlibdeps - using manual dependencies from debian/control"
+
+override_dh_installdeb:
+	dh_installdeb
+	# Ensure maintainer scripts are executable
+	chmod +x debian/open-voicetyping/DEBIAN/postinst || true
+	chmod +x debian/open-voicetyping/DEBIAN/prerm || true
+	chmod +x debian/open-voicetyping/DEBIAN/postrm || true
+
+override_dh_clean:
+	dh_clean
+	# Remove all debhelper-generated files
+	rm -f debian/*.debhelper
+	rm -f debian/*.substvars
+	rm -f debian/files
+	rm -f debian/debhelper-build-stamp
+	rm -rf debian/.debhelper/
+	rm -rf debian/open-voicetyping/
+	rm -rf .pybuild/

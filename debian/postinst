@@ -1,0 +1,146 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create/recreate virtual environment
+        if [ -d "/opt/open-voicetyping/venv" ]; then
+            echo "Removing existing virtual environment for clean reinstall..."
+            rm -rf /opt/open-voicetyping/venv
+        fi
+
+        echo "Creating virtual environment..."
+        python3 -m venv /opt/open-voicetyping/venv
+
+        echo "Installing voicetyping and dependencies..."
+        if ! /opt/open-voicetyping/venv/bin/pip install /opt/open-voicetyping/wheel/voicetyping-*.whl; then
+            echo "ERROR: Failed to install voicetyping." >&2
+            echo "Ensure internet access and try: sudo apt-get install build-essential portaudio19-dev libmp3lame-dev libudev-dev" >&2
+            exit 1
+        fi
+
+        # Create voicetyping system user if it doesn't exist
+        if ! getent passwd voicetyping > /dev/null 2>&1; then
+            adduser --system --no-create-home --group voicetyping
+            echo "Created system user: voicetyping"
+        fi
+
+        # Add voicetyping user to input group (for /dev/uinput access)
+        if ! groups voicetyping | grep -q '\binput\b'; then
+            usermod -a -G input voicetyping
+            echo "Added voicetyping user to input group"
+        fi
+
+        # Load uinput kernel module
+        if ! lsmod | grep -q '^uinput'; then
+            modprobe uinput || echo "Warning: Could not load uinput module. You may need to load it manually."
+        fi
+
+        # Reload udev rules and trigger
+        if command -v udevadm > /dev/null 2>&1; then
+            udevadm control --reload-rules || true
+            udevadm trigger || true
+            echo "Reloaded udev rules"
+        fi
+
+        # Compile GSettings schemas
+        if command -v glib-compile-schemas > /dev/null 2>&1; then
+            glib-compile-schemas /usr/share/glib-2.0/schemas || true
+            echo "Compiled GSettings schemas"
+        fi
+
+        # Reload DBus configuration
+        if systemctl is-active --quiet dbus.service; then
+            systemctl reload dbus.service || true
+            echo "Reloaded DBus configuration"
+        fi
+
+        # Enable and start the system keyboard service
+        systemctl daemon-reload || true
+        if ! systemctl is-enabled voicetyping-keyboard@voicetyping.service > /dev/null 2>&1; then
+            systemctl enable voicetyping-keyboard@voicetyping.service || true
+            echo "Enabled voicetyping-keyboard@voicetyping.service"
+        fi
+        if ! systemctl is-active --quiet voicetyping-keyboard@voicetyping.service; then
+            systemctl start voicetyping-keyboard@voicetyping.service || true
+            echo "Started voicetyping-keyboard@voicetyping.service"
+        fi
+
+        # Check for conflicting user service files
+        echo ""
+        echo "Checking for conflicting development service files..."
+        FOUND_CONFLICTS=false
+
+        for user_home in /home/*; do
+            if [ -d "$user_home" ]; then
+                username=$(basename "$user_home")
+                user_service_file="$user_home/.config/systemd/user/voicetyping-core.service"
+
+                if [ -f "$user_service_file" ]; then
+                    # Check if it contains development paths or hard keyboard dependency
+                    if grep -q "voicetyping-keyboard@voicetyping.service" "$user_service_file" 2>/dev/null || \
+                       grep -q "/workspace/prototypes/voicetyping" "$user_service_file" 2>/dev/null || \
+                       grep -q "/.venv/bin/voicetyping-server" "$user_service_file" 2>/dev/null; then
+
+                        echo ""
+                        echo "WARNING: Found conflicting service file for user '$username':"
+                        echo "  $user_service_file"
+                        echo ""
+                        echo "  This file contains development paths or outdated dependencies"
+                        echo "  and will prevent the service from starting correctly."
+                        echo ""
+                        echo "  User '$username' should remove it by running:"
+                        echo "    rm ~/.config/systemd/user/voicetyping-core.service"
+                        echo "    systemctl --user daemon-reload"
+                        echo ""
+                        FOUND_CONFLICTS=true
+                    fi
+                fi
+            fi
+        done
+
+        if [ "$FOUND_CONFLICTS" = false ]; then
+            echo "No conflicting service files found."
+        fi
+
+        echo ""
+        echo "=========================================="
+        echo "Open-Voicetyping installation complete!"
+        echo "=========================================="
+        echo ""
+        echo "To use open-voicetyping, each user must:"
+        echo ""
+        echo "1. Remove any stale development service files (if warned above)"
+        echo ""
+        echo "2. Enable and start the user service:"
+        echo "   systemctl --user enable voicetyping-core.service"
+        echo "   systemctl --user start voicetyping-core.service"
+        echo ""
+        echo "3. Enable the GNOME extension:"
+        echo "   gnome-extensions enable voicetyping@cx-lab.com"
+        echo ""
+        echo "4. Restart GNOME Shell (logout/login or Alt+F2, type 'r')"
+        echo ""
+        echo "5. Configure your API key in extension preferences"
+        echo ""
+        echo "Troubleshooting:"
+        echo "- If service fails with 'Unit voicetyping-keyboard@voicetyping.service not found',"
+        echo "  remove stale development files from ~/.config/systemd/user/"
+        echo ""
+        echo "System service status:"
+        systemctl status voicetyping-keyboard@voicetyping.service --no-pager || true
+        echo ""
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

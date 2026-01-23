@@ -31,12 +31,15 @@ class VirtualKeyboardDBusClient:
             logger.info(f"Connected to VirtualKeyboard service at {self._service_name}")
             return True
         except Exception as e:
-            raise KeyboardConnectionError(f"Failed to connect to keyboard service: {e}") from e
+            logger.warning(f"Failed to connect to keyboard service: {e}")
+            return False
 
     async def emit(self, text: str) -> bool:
         """Send text to be typed via the VirtualKeyboard service."""
+        # Attempt to connect if not already connected (lazy connection)
         if not self.proxy:
-            raise KeyboardTypingError("Not connected to VirtualKeyboard service")
+            if not await self.connect():
+                raise KeyboardConnectionError("Keyboard service is not available")
 
         try:
             text_md5 = hashlib.md5(text.encode()).hexdigest()

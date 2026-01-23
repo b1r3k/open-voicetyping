@@ -23,7 +23,7 @@ from dbus_next.service import ServiceInterface, method, signal as dbus_signal
 
 from .logging import root_logger
 from .audio.recorder import AudioRecorder, AudioRecording
-from .errors import set_error_handler, emit_error, VoiceTypingError
+from .errors import set_error_handler, emit_error, VoiceTypingError, KeyboardConnectionError, KeyboardTypingError
 from .openai_client import (
     OpenAITranscriptionModel,
     GroqTranscriptionModel,
@@ -137,12 +137,6 @@ class VoiceTypingInterface(ServiceInterface):
         self._processing_task.cancel()
 
     async def _processing_pipeline(self):
-        # Connect to the keyboard service
-        if not await self.keyboard_client.connect():
-            root_logger.error("Failed to connect to VirtualKeyboard service")
-            self._emit_error("keyboard", "Keyboard service unavailable")
-            return
-
         async for transcription_task in self.transcription_srv.process_queue():
             if transcription_task.transcription and transcription_task.store_transcripts:
                 transcritption_md5 = hashlib.md5(transcription_task.transcription.encode("utf-8")).hexdigest()
@@ -150,10 +144,13 @@ class VoiceTypingInterface(ServiceInterface):
                 with open(transcription_path, "w", encoding="utf-8") as f:
                     f.write(transcription_task.transcription)
                 # Send text to VirtualKeyboard via DBus
-                await self.keyboard_client.emit(transcription_task.transcription)
+                try:
+                    await self.keyboard_client.emit(transcription_task.transcription)
+                except (KeyboardConnectionError, KeyboardTypingError) as e:
+                    self._emit_error("keyboard", str(e))
             else:
-                root_logger.error(f"Failed to transcribe {transcription_task.audio_path}")
-                self._emit_error("transcription", "Failed to transcribe audio")
+                msg = f"Failed to transcribe {transcription_task.audio_path}"
+                self._emit_error("transcription", msg)
             if not transcription_task.store_transcripts and transcription_task.audio_path.exists():
                 try:
                     root_logger.debug(f"Cleaning up audio file {transcription_task.audio_path}")
@@ -218,7 +215,6 @@ class VoiceTypingInterface(ServiceInterface):
             )
             return "recording_stopped"
         except Exception as e:
-            root_logger.error(f"Failed to stop recording: {e}")
             self._emit_error("internal", f"Failed to stop recording: {e}")
             return "stop_failed"
         finally:

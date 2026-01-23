@@ -1,0 +1,43 @@
+Source: open-voicetyping
+Section: sound
+Priority: optional
+Maintainer: Lukasz Jachym <lukasz.jachym@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               python3 (>= 3.12),
+               python3-build,
+               python3-poetry-core
+Standards-Version: 4.6.2
+Homepage: https://github.com/yourusername/voicetyping
+Rules-Requires-Root: no
+
+Package: open-voicetyping
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         python3 (>= 3.12),
+         python3-dev,
+         python3-venv,
+         build-essential,
+         portaudio19-dev,
+         libmp3lame-dev,
+         libudev-dev,
+         libportaudio2,
+         libmp3lame0,
+         dbus,
+         systemd,
+         gnome-shell (>= 47)
+Description: Voice-to-text system for GNOME with OpenAI Whisper integration
+ Voicetyping is a GNOME Shell extension with a Python backend that provides
+ voice-to-text functionality using OpenAI Whisper or Groq APIs.
+ .
+ Features:
+  - Real-time audio recording with keyboard shortcuts
+  - Transcription via OpenAI Whisper or Groq
+  - Automatic text insertion via virtual keyboard
+  - Two-service architecture for privilege separation
+  - GNOME Shell 47+ integration with panel indicator
+ .
+ The system uses two systemd services: voicetyping-core (user service) for
+ audio recording and transcription, and voicetyping-keyboard (system service)
+ for secure keyboard simulation via /dev/uinput.
