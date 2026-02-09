@@ -25,6 +25,14 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential portaudio19-dev libmp3lame-dev libudev-dev libportaudio2 libmp3lame0 \
+            debhelper dh-python pybuild-plugin-pyproject \
+            python3-all python3-setuptools python3-poetry-core \
+            python3-build
       - name: Install poetry
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
