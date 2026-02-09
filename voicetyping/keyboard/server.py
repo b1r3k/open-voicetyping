@@ -4,7 +4,7 @@ import threading
 import queue
 
 from ..dbus_service import DBusService
-from .dbus_interface import VirtualKeyboardInterface
+from .dbus_interface import VirtualKeyboardInterface, TypingEvent
 from .dbus_interface import VirtualKeyboardService
 
 from ..logging import root_logger
@@ -30,7 +30,7 @@ def side_thread_main(typing_queue, event_loop, shutdown_event: threading.Event) 
 
 def server() -> None:
     """CLI entry point."""
-    typing_queue = queue.Queue()
+    typing_queue: queue.Queue[TypingEvent] = queue.Queue()
     virtual_kbd_svc = VirtualKeyboardService(typing_queue)
     loop = asyncio.new_event_loop()
     shutdown_event = threading.Event()

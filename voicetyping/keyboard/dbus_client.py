@@ -1,9 +1,10 @@
 import hashlib
 from typing import Optional
 
+from typing import Any
+
 from dbus_next import BusType
 from dbus_next.aio import MessageBus
-from dbus_next.service import ServiceInterface
 
 from ..logging import root_logger
 from ..errors import KeyboardConnectionError, KeyboardTypingError
@@ -16,7 +17,7 @@ class VirtualKeyboardDBusClient:
 
     def __init__(self):
         self.bus: Optional[MessageBus] = None
-        self.proxy: Optional[ServiceInterface] = None
+        self.proxy: Any = None
         self._service_name = "com.cxlab.VirtualKeyboard"
         self._object_path = "/com/cxlab/VirtualKeyboard"
         self._interface_name = "com.cxlab.VirtualKeyboardInterface"
