@@ -100,6 +100,7 @@ class VirtualKeyboard:
             for word in text.split():
                 for char in word:
                     self.type_char(self.device, char)
+                self.type_char(self.device, " ")
                 if self.emit_delay > 0:
                     time.sleep(self.emit_delay)
         except Exception:
