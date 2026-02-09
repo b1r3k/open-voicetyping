@@ -1,0 +1,19 @@
+  agent = "gemini"                  # AI agent to use
+  model = "gemini-3-flash-preview"  # Model override for this repo
+  review_context_count = 5   # Recent reviews to include as context
+  display_name = "backend"   # Custom name shown in TUI (optional)
+  excluded_branches = ["wip", "scratch"]  # Branches to skip reviews on
+
+  # Reasoning levels: thorough, standard, fast
+  review_reasoning = "thorough"  # For code reviews (default: thorough)
+  refine_reasoning = "standard"  # For refine command (default: standard)
+
+  fix_agent = "claude-code"
+  fix_model = "claude-sonnet-4-20250514"
+
+  # Project-specific review guidelines
+  review_guidelines = """
+  No database migrations needed - no production databases yet.
+  Prefer composition over inheritance.
+  All public APIs must have documentation comments.
+  """
