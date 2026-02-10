@@ -15,11 +15,23 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	# Create directory structure
-	mkdir -p debian/open-voicetyping/opt/open-voicetyping/wheel
 	mkdir -p debian/open-voicetyping/usr/bin
 
-	# Ship the wheel (venv created at install time in postinst)
-	cp dist/voicetyping-*.whl debian/open-voicetyping/opt/open-voicetyping/wheel/
+	# Create venv and install wheel with all dependencies at build time
+	python3 -m venv debian/open-voicetyping/opt/open-voicetyping/venv
+	debian/open-voicetyping/opt/open-voicetyping/venv/bin/pip install --no-cache-dir dist/voicetyping-*.whl
+
+	# Fix shebangs to use the final install path (not the build staging path)
+	find debian/open-voicetyping/opt/open-voicetyping/venv/bin -type f -exec \
+		sed -i 's|#!.*debian/open-voicetyping/opt/open-voicetyping/venv/bin/python3|#!/opt/open-voicetyping/venv/bin/python3|' {} +
+
+	# Fix pyvenv.cfg home path to system python
+	sed -i 's|^home = .*|home = /usr/bin|' debian/open-voicetyping/opt/open-voicetyping/venv/pyvenv.cfg
+
+	# Strip unnecessary files to reduce package size
+	rm -rf debian/open-voicetyping/opt/open-voicetyping/venv/lib/python*/site-packages/pip
+	rm -rf debian/open-voicetyping/opt/open-voicetyping/venv/lib/python*/site-packages/setuptools
+	find debian/open-voicetyping/opt/open-voicetyping/venv -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 	# Create wrapper scripts for /usr/bin
 	echo '#!/bin/bash' > debian/open-voicetyping/usr/bin/voicetyping-server
@@ -87,7 +99,7 @@ override_dh_auto_test:
 	@echo "Skipping tests"
 
 override_dh_shlibdeps:
-	# Skip automatic dependency scanning - dependencies installed at install time
+	# Skip automatic dependency scanning for the vendored venv
 	# All system library dependencies are manually declared in debian/control
 	@echo "Skipping dh_shlibdeps - using manual dependencies from debian/control"
 

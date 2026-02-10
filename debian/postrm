@@ -39,17 +39,6 @@ case "$1" in
         ;;
 
     remove)
-        # Remove virtual environment (created at install time, not tracked by dpkg)
-        if [ -d "/opt/open-voicetyping/venv" ]; then
-            rm -rf /opt/open-voicetyping/venv
-            echo "Removed virtual environment"
-        fi
-
-        # Clean up parent dir if empty
-        if [ -d "/opt/open-voicetyping" ]; then
-            rmdir /opt/open-voicetyping 2>/dev/null || true
-        fi
-
         # Recompile GSettings schemas after removal
         if command -v glib-compile-schemas > /dev/null 2>&1; then
             glib-compile-schemas /usr/share/glib-2.0/schemas || true

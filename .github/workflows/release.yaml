@@ -21,7 +21,8 @@ jobs:
           sudo apt-get install -y \
             debhelper dh-python pybuild-plugin-pyproject \
             python3-all python3-setuptools python3-poetry-core \
-            python3-build
+            python3-build python3-venv python3-dev build-essential \
+            portaudio19-dev libmp3lame-dev libudev-dev
 
       - name: Sync debian version from tag
         run: |
