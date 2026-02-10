@@ -53,7 +53,7 @@ debian-deps:
 
 debian-sync-version:
 	@echo "Syncing debian version to $(APP_VERSION)..."
-	sed -i '1s/(.*)/($(APP_VERSION)-1)/' debian/changelog
+	sed -i '1s/(.*)/($(APP_VERSION)-1~trixie1)/' debian/changelog
 
 debian-build: debian-sync-version
 	dpkg-buildpackage -us -uc -b

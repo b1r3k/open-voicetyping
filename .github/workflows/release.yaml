@@ -9,6 +9,7 @@ on:
 jobs:
   build-deb:
     runs-on: ubuntu-latest
+    container: debian:trixie
     permissions:
       contents: write
 
@@ -17,8 +18,8 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          apt-get update
+          apt-get install -y \
             debhelper dh-python pybuild-plugin-pyproject \
             python3-all python3-setuptools python3-poetry-core \
             python3-build python3-venv python3-dev build-essential \
@@ -28,7 +29,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           echo "Building version: ${VERSION}"
-          sed -i "1s/(.*)/(${VERSION}-1)/" debian/changelog
+          sed -i "1s/(.*)/(${VERSION}-1~trixie1)/" debian/changelog
 
       - name: Build .deb package
         run: dpkg-buildpackage -us -uc -b
@@ -36,5 +37,5 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ../open-voicetyping_*-1_amd64.deb
+          files: ../open-voicetyping_*~trixie1_amd64.deb
           generate_release_notes: true
