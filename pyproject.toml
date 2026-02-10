@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "voicetyping"
-version = "1.0.1"
+version = "1.0.2"
 description = ""
 authors = ["Lukasz Jachym <lukasz.jachym@gmail.com>"]
 readme = "README.md"
@@ -48,6 +48,10 @@ line-length = 120
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = ["uinput", "uinput.*", "lameenc", "pyaudio"]
+ignore_missing_imports = true
 
 [tool.isort]
 profile = "black"

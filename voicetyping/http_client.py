@@ -27,7 +27,7 @@ class HTTPClientError(httpx.HTTPStatusError):
     def response_summary(self) -> str:
         content = self.response.content
         status_code = self.status_code
-        msg = f"[{self.service}] Status code: {status_code} response content: {content}"
+        msg = f"[{self.service}] Status code: {status_code} response content: {content!r}"
         return msg
 
     @property
@@ -35,7 +35,7 @@ class HTTPClientError(httpx.HTTPStatusError):
         self.request.read()
         request = (
             f"[{self.service}] {self.request.method} {self.request.url} {self.request.headers}"
-            f" {self.request.content[:1024]}"
+            f" {self.request.content[:1024]!r}"
         )
         return request
 

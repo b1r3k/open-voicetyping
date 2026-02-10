@@ -1,0 +1,59 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        # Remove the voicetyping system user
+        if getent passwd voicetyping > /dev/null 2>&1; then
+            deluser --system voicetyping || true
+            echo "Removed system user: voicetyping"
+        fi
+
+        # Remove the group if it exists and is empty
+        if getent group voicetyping > /dev/null 2>&1; then
+            delgroup --system voicetyping 2>/dev/null || true
+        fi
+
+        # Remove virtual environment
+        if [ -d "/opt/open-voicetyping" ]; then
+            rm -rf /opt/open-voicetyping
+            echo "Removed application virtual environment"
+        fi
+
+        # Recompile GSettings schemas after purge
+        if command -v glib-compile-schemas > /dev/null 2>&1; then
+            glib-compile-schemas /usr/share/glib-2.0/schemas || true
+        fi
+
+        echo ""
+        echo "=========================================="
+        echo "Open-Voicetyping has been purged"
+        echo "=========================================="
+        echo ""
+        echo "Note: Per-user data has been preserved at:"
+        echo "  ~/.local/share/gnome-shell/extensions/"
+        echo ""
+        echo "To remove user data, each user should run:"
+        echo "  rm -rf ~/.local/share/gnome-shell/extensions/voicetyping@cx-lab.com"
+        echo ""
+        ;;
+
+    remove)
+        # Recompile GSettings schemas after removal
+        if command -v glib-compile-schemas > /dev/null 2>&1; then
+            glib-compile-schemas /usr/share/glib-2.0/schemas || true
+        fi
+        ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

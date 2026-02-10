@@ -1,15 +1,19 @@
 [Unit]
 Description=Voice Typing DBus Service
 After=network.target voicetyping-keyboard@voicetyping.service
-Requires=voicetyping-keyboard@voicetyping.service dbus.service sound.target
+Requires=dbus.service sound.target
 
 [Service]
 Type=simple
+# when using via system-level systemd service
 # YOUR_DAILYDRIVER_USER is the same user used for loging in
-User=<YOUR_DAILYDRIVER_USER>
-Group=<YOUR_DAILYDRIVER_USER_GROUP>
-Environment=XDG_RUNTIME_DIR=%t/user/%U
-Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/user/%U/bus
+#User=<YOUR_DAILYDRIVER_USER>
+#Group=<YOUR_DAILYDRIVER_USER_GROUP>
+#Environment=XDG_RUNTIME_DIR=%t/user/%U
+#Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/user/%U/bus
+# when using via user-level systemd service
+Environment=XDG_RUNTIME_DIR=%t
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
 WorkingDirectory=/home/lukasz/workspace/prototypes/voicetyping
 Environment=PYTHONPATH=/home/lukasz/workspace/prototypes/voicetyping
 ExecStart=/home/lukasz/workspace/prototypes/voicetyping/.venv/bin/voicetyping-server

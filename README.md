@@ -1,11 +1,11 @@
-[![CI](https://github.com/b1r3k/python-poetry-boilerplate/actions/workflows/ci.yaml/badge.svg)](https://github.com/b1r3k/python-poetry-boilerplate/actions/workflows/ci.yaml)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![CI](https://github.com/b1r3k/open-voicetyping/actions/workflows/ci.yaml/badge.svg)](https://github.com/b1r3k/open-voicetyping/actions/workflows/ci.yaml)[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-# Voicetyping
+# open-voicetyping
 
 open-voicetyping is a Linux-first, AI-driven dictation system that turns speech into real keyboard events.
 Built for GNOME and designed with privilege separation, it combines Whisper-based transcription with a hardened /dev/uinput backend.
 Ideal for developers and power users who want local control, extensibility, and strong security boundaries.
+Allows to use remote providers for TTS like Groq and OpenAI - more coming soon!
 
 ## Table of Contents
 
@@ -115,7 +115,9 @@ Given Debian as the target system
 
 ### Install python backend
 
-1. Build python wheel and install it in the system
+Use .deb package from releases or build from sources using `make debian-build` or perform manual installation in following way:
+
+1. Build python wheel and install it in the system or python virtual environment
 
    $ poetry build
 
@@ -173,7 +175,7 @@ sudo cp etc/voicetyping-keyboard.service /etc/systemd/system/voicetyping-keyboar
 # !! adjust python paths
 sudo systemctl enable voicetyping-keyboard@voicetyping.service
 sudo systemctl start voicetyping-keyboard@voicetyping.service
-# run as daily driver user (logging in to gnome session):
+# run as daily driver user (logging in to gnome session) or use user-level systemd service definition
 systemctl edit --force --full voicetyping-core.service
 # !! paste contents of etc/voicetyping-core.service and adjust python paths and user name
 systemctl enable voicetyping-core.service

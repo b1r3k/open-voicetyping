@@ -154,7 +154,8 @@ def record_audio(
             recording.stop()
         raise
     finally:
-        recording.cleanup()
+        if recording:
+            recording.cleanup()
         signal.signal(signal.SIGINT, original_handler)
 
 

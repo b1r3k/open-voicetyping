@@ -1,0 +1,20 @@
+open-voicetyping (1.0.2-1~trixie1) trixie; urgency=medium
+
+  * Renamed package from voicetyping to open-voicetyping
+  * No functional changes - package rename only
+
+ -- Lukasz Jachym <lukasz.jachym@gmail.com>  Sat, 25 Jan 2026 00:00:00 +0000
+
+open-voicetyping (1.0.1-1) unstable; urgency=medium
+
+  * Initial Debian package release
+  * Voice typing system with GNOME Shell extension
+  * Two-service architecture for privilege separation
+  * Support for OpenAI Whisper and Groq APIs
+  * Features:
+    - Real-time audio recording with keyboard shortcuts
+    - Automatic transcription and text insertion
+    - GNOME Shell 47+ integration with panel indicator
+    - Secure keyboard simulation via /dev/uinput
+
+ -- Lukasz Jachym <lukasz.jachym@gmail.com>  Wed, 22 Jan 2026 00:00:00 +0000

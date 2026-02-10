@@ -13,7 +13,7 @@ class TranscriptionClients:
     """Factory for creating transcription clients based on provider."""
 
     def __init__(self):
-        self.clients = {}
+        self.clients: dict[InferenceProvider, BaseAIClient] = {}
 
     def get(self, provider: InferenceProvider, api_key: str) -> BaseAIClient:
         """

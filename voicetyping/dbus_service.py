@@ -53,4 +53,5 @@ class DBusService:
             logger.debug(f"Error stopping DBus service: {e}")
         finally:
             logger.info("%s DBus service stopped", self.interface.name)
-            self.interface.close()
+            if hasattr(self.interface, "close"):
+                self.interface.close()

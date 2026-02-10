@@ -1,0 +1,34 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        # Stop the system keyboard service
+        if systemctl is-active --quiet voicetyping-keyboard@voicetyping.service; then
+            systemctl stop voicetyping-keyboard@voicetyping.service || true
+            echo "Stopped voicetyping-keyboard@voicetyping.service"
+        fi
+
+        echo ""
+        echo "=========================================="
+        echo "Note: User services must be stopped manually"
+        echo "=========================================="
+        echo ""
+        echo "Each user should run:"
+        echo "  systemctl --user stop voicetyping-core.service"
+        echo "  systemctl --user disable voicetyping-core.service"
+        echo ""
+        ;;
+
+    failed-upgrade)
+        ;;
+
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

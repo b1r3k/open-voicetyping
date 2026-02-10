@@ -138,7 +138,7 @@ class BaseAIClient(AsyncHttpClient, ABC):
         language: str,
     ) -> AsyncGenerator[Any, None]:
         """Stream transcription from audio file."""
-        pass
+        yield  # pragma: no cover
 
 
 class OpenAIClient(BaseAIClient):
@@ -188,7 +188,7 @@ class OpenAIClient(BaseAIClient):
     async def create_transcription(
         self,
         file_path: Path,
-        model: OpenAITranscriptionModel,
+        model: TranscriptionModel,
         language: str,
     ) -> str:
         url = self.get_url("transcription")
@@ -213,15 +213,15 @@ class OpenAIClient(BaseAIClient):
             }
             try:
                 response = await self.post(url, headers=headers, data=fields, files=files)
-                content = await response.aread()
-                return content
+                content: bytes = await response.aread()
+                return content.decode("utf-8")
             except (HTTPClientError, RetryException) as e:
                 raise APIError(f"Transcription API failed: {e}") from e
 
     async def stream_transcription(
         self,
         file_path: Path,
-        model: OpenAITranscriptionModel,
+        model: TranscriptionModel,
         language: str,
     ) -> AsyncGenerator[Any, None]:
         """

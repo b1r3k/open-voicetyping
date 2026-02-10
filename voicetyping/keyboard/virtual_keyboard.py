@@ -97,9 +97,13 @@ class VirtualKeyboard:
 
     def type_text(self, text):
         try:
-            for word in text.split():
+            words = text.split()
+            for i, word in enumerate(words):
                 for char in word:
                     self.type_char(self.device, char)
+                # Only append space if not the last word
+                if i < len(words) - 1:
+                    self.type_char(self.device, " ")
                 if self.emit_delay > 0:
                     time.sleep(self.emit_delay)
         except Exception:

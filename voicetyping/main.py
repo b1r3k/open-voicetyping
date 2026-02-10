@@ -23,7 +23,7 @@ from dbus_next.service import ServiceInterface, method, signal as dbus_signal
 
 from .logging import root_logger
 from .audio.recorder import AudioRecorder, AudioRecording
-from .errors import set_error_handler, emit_error, VoiceTypingError
+from .errors import set_error_handler, emit_error, VoiceTypingError, KeyboardConnectionError, KeyboardTypingError
 from .openai_client import (
     OpenAITranscriptionModel,
     GroqTranscriptionModel,
@@ -80,7 +80,7 @@ class TranscriptionService:
                     text = await transcription_task.client.create_transcription(
                         transcription_task.audio_path, transcription_task.model, transcription_task.language
                     )
-                    text = text.decode("utf-8").strip()
+                    text = text.strip()
                     transcription_task.transcription = text
                 except VoiceTypingError as e:
                     e.emit()
@@ -137,12 +137,6 @@ class VoiceTypingInterface(ServiceInterface):
         self._processing_task.cancel()
 
     async def _processing_pipeline(self):
-        # Connect to the keyboard service
-        if not await self.keyboard_client.connect():
-            root_logger.error("Failed to connect to VirtualKeyboard service")
-            self._emit_error("keyboard", "Keyboard service unavailable")
-            return
-
         async for transcription_task in self.transcription_srv.process_queue():
             if transcription_task.transcription and transcription_task.store_transcripts:
                 transcritption_md5 = hashlib.md5(transcription_task.transcription.encode("utf-8")).hexdigest()
@@ -150,10 +144,13 @@ class VoiceTypingInterface(ServiceInterface):
                 with open(transcription_path, "w", encoding="utf-8") as f:
                     f.write(transcription_task.transcription)
                 # Send text to VirtualKeyboard via DBus
-                await self.keyboard_client.emit(transcription_task.transcription)
+                try:
+                    await self.keyboard_client.emit(transcription_task.transcription)
+                except (KeyboardConnectionError, KeyboardTypingError) as e:
+                    self._emit_error("keyboard", str(e))
             else:
-                root_logger.error(f"Failed to transcribe {transcription_task.audio_path}")
-                self._emit_error("transcription", "Failed to transcribe audio")
+                msg = f"Failed to transcribe {transcription_task.audio_path}"
+                self._emit_error("transcription", msg)
             if not transcription_task.store_transcripts and transcription_task.audio_path.exists():
                 try:
                     root_logger.debug(f"Cleaning up audio file {transcription_task.audio_path}")
@@ -163,7 +160,7 @@ class VoiceTypingInterface(ServiceInterface):
                     root_logger.error(f"Failed to delete audio file {transcription_task.audio_path}: {e}")
 
     @method()
-    async def StartRecording(self, device_name: "s", transcript_path: "s", store_transcripts: "b") -> "s":  # noqa: F821
+    async def StartRecording(self, device_name: "s", transcript_path: "s", store_transcripts: "b") -> "s":  # type: ignore[name-defined]  # noqa: F821
         """Start voice recording."""
 
         if self._state.is_recording:
@@ -183,12 +180,13 @@ class VoiceTypingInterface(ServiceInterface):
             return "recording_failed"
 
     @method()
-    async def StopRecording(self, language: "s", provider: "s", model: "s", api_key: "s") -> "s":  # noqa: F821
+    async def StopRecording(self, language: "s", provider: "s", model: "s", api_key: "s") -> "s":  # type: ignore[name-defined]  # noqa: F821
         """Stop voice recording."""
         if not self._state.is_recording:
             root_logger.warning("No recording in progress")
             return "not_recording"
 
+        assert self._recording is not None
         try:
             self._recording.stop()
             self._state.transition(ProcessingEvent.STOP_RECORDING)
@@ -200,6 +198,7 @@ class VoiceTypingInterface(ServiceInterface):
             filename = Path(self.transcript_path) / now_str / md5_hash
             root_logger.info("Saving audio to %s", filename.resolve())
             audio_path = self._recording.save(filename)
+            assert audio_path is not None
             provider = InferenceProvider(provider)
             model = transcription_model_from_provider(provider, model)
             client = self.clients.get(provider, api_key)
@@ -218,26 +217,26 @@ class VoiceTypingInterface(ServiceInterface):
             )
             return "recording_stopped"
         except Exception as e:
-            root_logger.error(f"Failed to stop recording: {e}")
             self._emit_error("internal", f"Failed to stop recording: {e}")
             return "stop_failed"
         finally:
-            self._recording.cleanup()
+            if self._recording:
+                self._recording.cleanup()
             self._recording = None
 
     @method()
-    def GetRecordingState(self) -> "b":  # noqa: F821
+    def GetRecordingState(self) -> "b":  # type: ignore[name-defined]  # noqa: F821
         """Get current recording state."""
         return self._state.is_recording
 
     @method()
-    def GetAvailableInferenceProviders(self) -> "as":  # noqa: F821 F722
+    def GetAvailableInferenceProviders(self) -> "as":  # type: ignore[valid-type]  # noqa: F821 F722
         """Get list of available inference providers."""
         providers = list(provider.value for provider in InferenceProvider)
         return providers
 
     @method()
-    def GetAvailableProviderModels(self, provider: "s") -> "as":  # noqa: F821 F722
+    def GetAvailableProviderModels(self, provider: "s") -> "as":  # type: ignore[name-defined, valid-type]  # noqa: F821 F722
         """Get list of available inference providers."""
         match InferenceProvider(provider):
             case InferenceProvider.OPENAI:
@@ -246,7 +245,7 @@ class VoiceTypingInterface(ServiceInterface):
                 return [model.value for model in GroqTranscriptionModel]
 
     @method()
-    def GetAvailableAudioSources(self) -> "as":  # noqa: F821 F722
+    def GetAvailableAudioSources(self) -> "as":  # type: ignore[valid-type]  # noqa: F821 F722
         """Get list of available audio sources for recording."""
         devices = self.audio_recorder.list_devices()
         root_logger.info("Fetching audio sources: %s", devices)
@@ -254,12 +253,12 @@ class VoiceTypingInterface(ServiceInterface):
         return [device["name"] for device in devices]
 
     @dbus_signal()
-    def RecordingStateChanged(self) -> "b":  # noqa: F821 F722
+    def RecordingStateChanged(self) -> "b":  # type: ignore[name-defined]  # noqa: F821 F722
         """Signal emitted when recording state changes."""
         return self._state.is_recording
 
     @dbus_signal()
-    def ErrorOccurred(self, category: "s", message: "s") -> "ss":  # noqa: F821 F722
+    def ErrorOccurred(self, category: "s", message: "s") -> "ss":  # type: ignore[name-defined, valid-type]  # noqa: F821 F722
         """Signal emitted when an error occurs. Returns (category, code, message)."""
         return [category, message]
 

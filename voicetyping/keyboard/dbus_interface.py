@@ -54,7 +54,7 @@ class VirtualKeyboardInterface(ServiceInterface):
         self.queue = q
 
     @method()
-    async def emit(self, text: "s") -> None:  # noqa: F821 F722
+    async def emit(self, text: "s") -> None:  # type: ignore[name-defined]  # noqa: F821 F722
         """Start voice recording."""
         text_hash = hashlib.md5(text.encode())
         job = TypingEvent(text=text, md5_hash=text_hash.hexdigest())
