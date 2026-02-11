@@ -12,6 +12,8 @@ jobs:
     container: debian:trixie
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v4
@@ -34,8 +36,17 @@ jobs:
       - name: Build .deb package
         run: dpkg-buildpackage -us -uc -b
 
+      - name: Find built package
+        id: deb
+        run: echo "path=$(ls ../open-voicetyping_*~trixie1_amd64.deb)" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ steps.deb.outputs.path }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ../open-voicetyping_*~trixie1_amd64.deb
+          files: ${{ steps.deb.outputs.path }}
           generate_release_notes: true
