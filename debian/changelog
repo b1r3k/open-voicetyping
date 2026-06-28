@@ -1,4 +1,4 @@
-open-voicetyping (1.0.2-1~trixie1) trixie; urgency=medium
+open-voicetyping (1.1.1-1~trixie1) trixie; urgency=medium
 
   * Renamed package from voicetyping to open-voicetyping
   * No functional changes - package rename only
