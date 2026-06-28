@@ -27,7 +27,7 @@ class TypingEvent(BaseModel):
 
 class VirtualKeyboardService:
     def __init__(self, q: queue.Queue[TypingEvent]) -> None:
-        self.virtual_keyboard = VirtualKeyboard(emit_delay=0.02)
+        self.virtual_keyboard = VirtualKeyboard(emit_delay=0)
         self.queue = q
 
     def process_queue(self):

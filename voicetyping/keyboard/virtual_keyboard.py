@@ -60,7 +60,7 @@ PL_ALT_CHARS = {
 
 
 class VirtualKeyboard:
-    def __init__(self, emit_delay=0.025):
+    def __init__(self, emit_delay):
         self.char_to_key = CHAR_TO_KEY.copy()
         self.events = set(CHAR_TO_KEY.values())
         self.events.update(
@@ -68,8 +68,25 @@ class VirtualKeyboard:
         )  # For shiftable/alt chars
         self.emit_delay = emit_delay
         self.device = uinput.Device(self.events)
+        logger.info("Virtual keyboard initialized with emit delay: %s", self.emit_delay)
 
-    def type_char(self, device, char):
+    def type_combo(self, modifiers, key, hold, gap):
+        for mod in modifiers:
+            self.device.emit(mod, 1)
+            time.sleep(gap)
+
+        self.device.emit(key, 1)
+        time.sleep(hold)
+        self.device.emit(key, 0)
+        time.sleep(gap)
+
+        for mod in reversed(modifiers):
+            self.device.emit(mod, 0)
+            time.sleep(gap)
+
+        time.sleep(gap)
+
+    def type_char(self, device, char, hold=0.025, gap=0.025):
         combo = []
 
         if char.isupper():
@@ -90,10 +107,12 @@ class VirtualKeyboard:
             return
 
         if combo:
-            device.emit_combo(combo + [key])
+            self.type_combo(combo, key, hold, gap)
         else:
-            device.emit_click(key)
-        device.syn()
+            device.emit(key, 1)
+            time.sleep(hold)
+            device.emit(key, 0)
+            time.sleep(gap)
 
     def type_text(self, text):
         try:
